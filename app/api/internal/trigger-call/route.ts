@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
   const { data: contact, error } = await db.from("contacts").select("*").eq("id", contact_id).single();
   if (error || !contact) return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   if (!contact.phone) return NextResponse.json({ error: "Contact has no phone number" }, { status: 400 });
+  if (contact.do_not_call) {
+    return NextResponse.json({ error: "This contact is marked Do Not Call" }, { status: 403 });
+  }
 
   const webhookUrl = process.env.MAKE_OUTBOUND_WEBHOOK_URL;
   if (!webhookUrl) {

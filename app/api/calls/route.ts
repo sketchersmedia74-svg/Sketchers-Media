@@ -67,14 +67,23 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // If the AI captured an email during the call, save it to the contact record
-  // so the follow-up email step can send to it directly from the CRM.
-  if (body.captured_email) {
-    await db
-      .from("contacts")
-      .update({ email: body.captured_email })
-      .eq("id", body.contact_id);
+  // Track how many AI call attempts have been made against this contact, and
+  // flag it once 3 straight no-answers pile up so automated dialers can skip it.
+  const { data: contactForAttempts } = await db
+    .from("contacts")
+    .select("call_attempts")
+    .eq("id", body.contact_id)
+    .single();
+
+  const nextAttempts = (contactForAttempts?.call_attempts ?? 0) + 1;
+  const contactUpdate: Record<string, any> = { call_attempts: nextAttempts };
+  if (nextAttempts >= 3 && body.outcome === "no_answer") {
+    contactUpdate.max_attempts_reached = true;
   }
+  if (body.captured_email) {
+    contactUpdate.email = body.captured_email;
+  }
+  await db.from("contacts").update(contactUpdate).eq("id", body.contact_id);
 
   // Auto-advance the deal from "New" -> "Contacted" once an AI call is logged.
   await db

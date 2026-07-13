@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/contacts -> create a contact
-// Body: { first_name, last_name?, email?, phone?, company_id?, owner? }
+// Body: { first_name, last_name?, email?, phone?, company_id?, owner?, source? }
+// source: e.g. "apify_scrape" for Make.com-tagged scraped leads; defaults to "manual".
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
   if (authError) return authError;
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
   }
 
   const db = supabaseAdmin();
-  const { data, error } = await db.from("contacts").insert(body).select().single();
+  const { data, error } = await db
+    .from("contacts")
+    .insert({ ...body, source: body.source || "manual" })
+    .select()
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

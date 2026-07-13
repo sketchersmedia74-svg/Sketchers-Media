@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data);
 }
 
-// Body: { name, website?, industry?, notes? }
+// Body: { name, website?, industry?, notes?, project_id? }
+// project_id: optional uuid of a projects row, so Make.com/Apify scrapers can
+// tag scraped companies with the right niche (Dentists, Chiropractors, etc.)
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
   if (authError) return authError;

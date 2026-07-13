@@ -2,6 +2,35 @@
 
 create extension if not exists "uuid-ossp";
 
+-- Profiles: one row per Supabase Auth user, carrying app-level role.
+-- id matches auth.users.id. Created automatically whenever a team member is
+-- added via POST /api/team-members.
+create table if not exists profiles (
+  id uuid primary key,
+  email text not null,
+  role text not null default 'member'
+    check (role in ('admin', 'member')),
+  created_at timestamptz not null default now()
+);
+
+alter table profiles enable row level security;
+create policy "Users can read their own profile" on profiles
+  for select using (auth.uid() = id);
+
+-- Projects (organize leads by niche, e.g. Dentists, Chiropractors, Med Spas)
+create table if not exists projects (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  color text not null default '#5C1A2E',
+  created_at timestamptz not null default now()
+);
+
+alter table projects enable row level security;
+create policy "Authenticated team can read projects" on projects
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write projects" on projects
+  for all using (auth.role() = 'authenticated');
+
 -- Companies
 create table if not exists companies (
   id uuid primary key default uuid_generate_v4(),
@@ -9,8 +38,11 @@ create table if not exists companies (
   website text,
   industry text,
   notes text,
+  project_id uuid references projects(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+create index if not exists idx_companies_project on companies(project_id);
 
 -- Contacts
 create table if not exists contacts (
@@ -21,6 +53,10 @@ create table if not exists contacts (
   phone text,                         -- E.164 format recommended, e.g. +923001234567
   company_id uuid references companies(id) on delete set null,
   owner text,                         -- team member responsible
+  source text not null default 'manual',   -- e.g. manual / apify_scrape / referral
+  call_attempts int not null default 0,
+  max_attempts_reached boolean not null default false,
+  do_not_call boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -33,10 +69,48 @@ create table if not exists deals (
   value numeric default 0,
   stage text not null default 'New'
     check (stage in ('New','Contacted','Proposal','Won','Lost')),
+  lost_reason text
+    check (lost_reason in ('not_interested','no_budget','bad_timing','competitor','other')),
   owner text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Notes / activity timeline on a contact
+create table if not exists notes (
+  id uuid primary key default uuid_generate_v4(),
+  contact_id uuid references contacts(id) on delete cascade,
+  text text not null,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_notes_contact on notes(contact_id);
+
+alter table notes enable row level security;
+create policy "Authenticated team can read notes" on notes
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write notes" on notes
+  for all using (auth.role() = 'authenticated');
+
+-- Tasks / reminders on a contact
+create table if not exists tasks (
+  id uuid primary key default uuid_generate_v4(),
+  contact_id uuid references contacts(id) on delete cascade,
+  description text not null,
+  due_date date,
+  completed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_tasks_contact on tasks(contact_id);
+create index if not exists idx_tasks_due_date on tasks(due_date);
+
+alter table tasks enable row level security;
+create policy "Authenticated team can read tasks" on tasks
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write tasks" on tasks
+  for all using (auth.role() = 'authenticated');
 
 -- AI call logs (populated by Bland.ai / Vapi via Make.com webhook)
 create table if not exists calls (
