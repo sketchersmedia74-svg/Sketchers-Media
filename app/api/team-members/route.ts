@@ -38,18 +38,20 @@ export async function GET() {
   const { data, error } = await db.auth.admin.listUsers();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const users: { id: string; email: string | null }[] = data.users;
+
   // Self-heal: backfill a profiles row for any auth user that's missing one
   // (e.g. from a past failed insert, or a user created outside this route).
   const { data: existingProfiles } = await db.from("profiles").select("id");
-  const existingIds = new Set((existingProfiles || []).map((p) => p.id));
-  const missing = data.users.filter((u) => !existingIds.has(u.id));
+  const existingIds = new Set<string>((existingProfiles ?? []).map((p: { id: string }) => p.id));
+  const missing = users.filter((u) => !existingIds.has(u.id));
   if (missing.length) {
     await db.from("profiles").insert(
       missing.map((u) => ({ id: u.id, email: u.email ?? "", role: "member" }))
     );
   }
 
-  const members = data.users.map((u) => ({ id: u.id, email: u.email }));
+  const members = users.map((u) => ({ id: u.id, email: u.email }));
   return NextResponse.json(members);
 }
 
