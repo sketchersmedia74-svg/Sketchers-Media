@@ -58,6 +58,7 @@ export default function Topbar() {
         <a href="/dashboard">Pipeline</a>
         <a href="/contacts">Contacts</a>
         <a href="/companies">Companies</a>
+        <a href="/projects">Projects</a>
         {isAdmin && <a href="/team">Team</a>}
       </nav>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

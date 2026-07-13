@@ -18,6 +18,11 @@ export default function CompaniesPage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState("#5C1A2E");
   const [creatingProject, setCreatingProject] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingCompany, setEditingCompany] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: "", website: "", industry: "", notes: "", project_id: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -44,10 +49,11 @@ export default function CompaniesPage() {
     setProjects(data || []);
   }
 
-  async function createProjectInline() {
-    setFormError("");
+  async function createProjectInline(target: "new" | "edit") {
+    const setError = target === "new" ? setFormError : setEditError;
+    setError("");
     if (!newProjectName.trim()) {
-      setFormError("Project name is required.");
+      setError("Project name is required.");
       return;
     }
     setCreatingProject(true);
@@ -58,13 +64,66 @@ export default function CompaniesPage() {
       .single();
     setCreatingProject(false);
     if (error) {
-      setFormError(error.message);
+      setError(error.message);
       return;
     }
     setProjects([...projects, data].sort((a, b) => a.name.localeCompare(b.name)));
-    setForm({ ...form, project_id: data.id });
+    if (target === "new") {
+      setForm({ ...form, project_id: data.id });
+    } else {
+      setEditForm({ ...editForm, project_id: data.id });
+    }
     setNewProjectName("");
     setNewProjectColor("#5C1A2E");
+  }
+
+  async function updateCompanyProject(companyId: string, projectId: string) {
+    await supabaseBrowser.from("companies").update({ project_id: projectId || null }).eq("id", companyId);
+    setEditingProjectId(null);
+    loadCompanies();
+  }
+
+  function openEditCompany(c: any) {
+    setEditingCompany(c);
+    setEditForm({
+      name: c.name || "",
+      website: c.website || "",
+      industry: c.industry || "",
+      notes: c.notes || "",
+      project_id: c.project_id || "",
+    });
+    setEditError("");
+  }
+
+  async function updateCompany(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError("");
+    if (!editForm.name.trim()) {
+      setEditError("Company name is required.");
+      return;
+    }
+    if (!editForm.project_id || editForm.project_id === NEW_PROJECT_VALUE) {
+      setEditError("Please select or create a project.");
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await supabaseBrowser
+      .from("companies")
+      .update({
+        name: editForm.name.trim(),
+        website: editForm.website.trim() || null,
+        industry: editForm.industry.trim() || null,
+        notes: editForm.notes.trim() || null,
+        project_id: editForm.project_id,
+      })
+      .eq("id", editingCompany.id);
+    setEditSaving(false);
+    if (error) {
+      setEditError(error.message);
+      return;
+    }
+    setEditingCompany(null);
+    loadCompanies();
   }
 
   async function createCompany(e: React.FormEvent) {
@@ -190,7 +249,7 @@ export default function CompaniesPage() {
                     type="button"
                     className="btn"
                     disabled={creatingProject}
-                    onClick={createProjectInline}
+                    onClick={() => createProjectInline("new")}
                   >
                     {creatingProject ? "Creating…" : "Create"}
                   </button>
@@ -214,23 +273,142 @@ export default function CompaniesPage() {
             </form>
           </div>
         )}
+
+        {editingCompany && (
+          <div className="modal-overlay" onClick={() => setEditingCompany(null)}>
+            <form className="login-card" onClick={(e) => e.stopPropagation()} onSubmit={updateCompany}>
+              <h3 style={{ marginTop: 0 }}>Edit Company</h3>
+              <label>Name</label>
+              <input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                required
+              />
+              <label>Website</label>
+              <input
+                value={editForm.website}
+                onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+              />
+              <label>Industry</label>
+              <input
+                value={editForm.industry}
+                onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+              />
+              <label>Notes</label>
+              <textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={3}
+                style={{ width: "100%", padding: 10, margin: "6px 0 14px", borderRadius: 6, border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text)", fontFamily: "inherit", resize: "vertical" }}
+              />
+              <label>Project *</label>
+              <select
+                value={editForm.project_id}
+                onChange={(e) => setEditForm({ ...editForm, project_id: e.target.value })}
+                style={{ width: "100%", padding: 10, margin: "6px 0 14px", borderRadius: 6, border: "1px solid var(--input-border)" }}
+              >
+                <option value="">— Select a project —</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                <option value={NEW_PROJECT_VALUE}>+ Create new project…</option>
+              </select>
+
+              {editForm.project_id === NEW_PROJECT_VALUE && (
+                <div
+                  style={{
+                    background: "var(--primary-tint)",
+                    border: "1px solid var(--primary)",
+                    borderRadius: 6,
+                    padding: 10,
+                    marginTop: -8,
+                    marginBottom: 14,
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                  }}
+                >
+                  <input
+                    placeholder="Project name (e.g. Dentists)"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    style={{ flex: 1, padding: 8, borderRadius: 6, border: "1px solid var(--input-border)" }}
+                  />
+                  <input
+                    type="color"
+                    value={newProjectColor}
+                    onChange={(e) => setNewProjectColor(e.target.value)}
+                    style={{ width: 40, height: 36, padding: 0, border: "none", borderRadius: 6 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={creatingProject}
+                    onClick={() => createProjectInline("edit")}
+                  >
+                    {creatingProject ? "Creating…" : "Create"}
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn" type="submit" disabled={editSaving} style={{ flex: 1 }}>
+                  {editSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setEditingCompany(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+              {editError && <p className="error">{editError}</p>}
+            </form>
+          </div>
+        )}
         {loading ? <p>Loading…</p> : (
           <table>
-            <thead><tr><th>Name</th><th>Project</th><th>Industry</th><th>Website</th></tr></thead>
+            <thead><tr><th>Name</th><th>Project</th><th>Industry</th><th>Website</th><th></th></tr></thead>
             <tbody>
               {filteredCompanies.map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td>
-                    {c.projects ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.projects.color, display: "inline-block" }} />
-                        {c.projects.name}
+                    {editingProjectId === c.id ? (
+                      <select
+                        autoFocus
+                        value={c.project_id || ""}
+                        onChange={(e) => updateCompanyProject(c.id, e.target.value)}
+                        onBlur={() => setEditingProjectId(null)}
+                        style={{ fontSize: 13 }}
+                      >
+                        <option value="">— None —</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", textDecoration: "underline dotted" }}
+                        title="Click to change project"
+                        onClick={() => setEditingProjectId(c.id)}
+                      >
+                        {c.projects ? (
+                          <>
+                            <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.projects.color, display: "inline-block" }} />
+                            {c.projects.name}
+                          </>
+                        ) : "—"}
                       </span>
-                    ) : "—"}
+                    )}
                   </td>
                   <td>{c.industry || "—"}</td>
                   <td>{c.website || "—"}</td>
+                  <td>
+                    <button className="btn secondary" onClick={() => openEditCompany(c)}>Edit</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

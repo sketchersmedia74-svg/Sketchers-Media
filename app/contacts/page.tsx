@@ -177,16 +177,17 @@ export default function ContactsPage() {
         const idx = columnMap[key];
         return idx >= 0 ? (row[idx] || "").trim() : "";
       };
-      const first_name = get("first_name");
-      const last_name = get("last_name");
+      let first_name = get("first_name");
+      let last_name = get("last_name");
       const phone = get("phone");
       const email = get("email");
       const companyName = get("company");
 
       if (!first_name) {
-        invalidSkipped++;
-        continue;
+        first_name = companyName || "Unknown";
+        last_name = "";
       }
+
       if (phone && seenPhones.has(phone)) {
         dupSkipped++;
         continue;
@@ -226,14 +227,15 @@ export default function ContactsPage() {
       added++;
     }
 
-    setImportResult({ added, dupSkipped, invalidSkipped });
-    setImporting(false);
-    loadContacts();
+    await loadContacts();
     const { data: companyData } = await supabaseBrowser
       .from("companies")
       .select("id, name")
       .order("name", { ascending: true });
     setCompanies(companyData || []);
+
+    setImportResult({ added, dupSkipped, invalidSkipped });
+    setImporting(false);
   }
 
   const filteredContacts = contacts.filter((c) => {
@@ -473,7 +475,7 @@ export default function ContactsPage() {
                     ✅ {importResult.added} contact{importResult.added === 1 ? "" : "s"} added.<br />
                     ⚠️ {importResult.dupSkipped} skipped as duplicate phone number{importResult.dupSkipped === 1 ? "" : "s"}.<br />
                     {importResult.invalidSkipped > 0 && (
-                      <>❌ {importResult.invalidSkipped} skipped (missing first name or error).<br /></>
+                      <>❌ {importResult.invalidSkipped} skipped (save error).<br /></>
                     )}
                   </p>
                   <button className="btn" style={{ width: "100%" }} onClick={() => setShowImport(false)}>
