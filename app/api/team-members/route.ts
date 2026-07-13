@@ -38,7 +38,10 @@ export async function GET() {
   const { data, error } = await db.auth.admin.listUsers();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const users: { id: string; email: string | null }[] = data.users;
+  const rawUsers = data.users as unknown as { id: string; email: string | null }[];
+  const users: { id: string; email: string }[] = rawUsers
+    .filter((u): u is { id: string; email: string } => !!u.email)
+    .map((u) => ({ id: u.id, email: u.email }));
 
   // Self-heal: backfill a profiles row for any auth user that's missing one
   // (e.g. from a past failed insert, or a user created outside this route).
