@@ -167,7 +167,15 @@ export default function ContactsPage() {
     let dupSkipped = 0;
     let invalidSkipped = 0;
 
-    const seenPhones = new Set(contacts.map((c) => c.phone).filter(Boolean));
+    // Dedup on the full record (name, phone, email, company) rather than just
+    // phone, so re-importing the same list doesn't recreate identical contacts.
+    const normalize = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+    const makeSignature = (firstName: string, lastName: string, phone: string, email: string, companyName: string) =>
+      [normalize(firstName), normalize(lastName), normalize(phone), normalize(email), normalize(companyName)].join("|");
+
+    const seenSignatures = new Set(
+      contacts.map((c) => makeSignature(c.first_name, c.last_name, c.phone, c.email, c.companies?.name))
+    );
     const companyIdByName = new Map<string, string>(
       companies.map((c) => [c.name.trim().toLowerCase(), c.id])
     );
@@ -188,7 +196,8 @@ export default function ContactsPage() {
         last_name = "";
       }
 
-      if (phone && seenPhones.has(phone)) {
+      const signature = makeSignature(first_name, last_name, phone, email, companyName);
+      if (seenSignatures.has(signature)) {
         dupSkipped++;
         continue;
       }
@@ -199,14 +208,29 @@ export default function ContactsPage() {
         if (companyIdByName.has(key)) {
           company_id = companyIdByName.get(key)!;
         } else {
-          const { data: newCompany, error: companyError } = await supabaseBrowser
+          // Our local `companies` list was loaded once when the page mounted, so it
+          // can be stale (a company created elsewhere since then wouldn't be in it).
+          // Check the database directly, case-insensitively, before creating a new one.
+          const { data: existingCompany } = await supabaseBrowser
             .from("companies")
-            .insert({ name: companyName })
-            .select()
-            .single();
-          if (!companyError && newCompany) {
-            company_id = newCompany.id;
-            companyIdByName.set(key, newCompany.id);
+            .select("id, name")
+            .ilike("name", companyName)
+            .limit(1)
+            .maybeSingle();
+
+          if (existingCompany) {
+            company_id = existingCompany.id;
+            companyIdByName.set(key, existingCompany.id);
+          } else {
+            const { data: newCompany, error: companyError } = await supabaseBrowser
+              .from("companies")
+              .insert({ name: companyName })
+              .select()
+              .single();
+            if (!companyError && newCompany) {
+              company_id = newCompany.id;
+              companyIdByName.set(key, newCompany.id);
+            }
           }
         }
       }
@@ -223,7 +247,7 @@ export default function ContactsPage() {
         invalidSkipped++;
         continue;
       }
-      if (phone) seenPhones.add(phone);
+      seenSignatures.add(signature);
       added++;
     }
 
@@ -473,7 +497,7 @@ export default function ContactsPage() {
                 <>
                   <p>
                     ✅ {importResult.added} contact{importResult.added === 1 ? "" : "s"} added.<br />
-                    ⚠️ {importResult.dupSkipped} skipped as duplicate phone number{importResult.dupSkipped === 1 ? "" : "s"}.<br />
+                    ⚠️ {importResult.dupSkipped} skipped as duplicate{importResult.dupSkipped === 1 ? "" : "s"} (matching name, phone, email, and company).<br />
                     {importResult.invalidSkipped > 0 && (
                       <>❌ {importResult.invalidSkipped} skipped (save error).<br /></>
                     )}
