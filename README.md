@@ -89,6 +89,52 @@ Vercel gives you the public URL Make.com will call.
 - `POST /api/deals` — create a deal
 - `PATCH /api/deals/:id` — move a deal's stage
 - `GET /api/calls?contact_id=...` — pull call history for a contact
+- `GET /api/availability` — open slots on the shared Google Calendar (see below)
+- `POST /api/bookings` — create a booking on the shared calendar (see below)
+
+## 5. Google Calendar booking (shared company calendar)
+
+A single shared Google Calendar is used for all bookings — there's no per-user
+calendar. Set it up once:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   enable the **Google Calendar API** and create an **OAuth 2.0 Client ID**
+   (Application type: Web application).
+2. Add `https://your-deployed-app.vercel.app/api/calendar/oauth/callback` to
+   **Authorized redirect URIs**.
+3. Copy the Client ID/Secret into `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`,
+   and set `GOOGLE_OAUTH_REDIRECT_URI` to the same callback URL.
+4. Sign in as an admin, go to **Calendar Settings** in the sidebar, click
+   **Connect Google Calendar**, and authorize with the Google account whose
+   calendar the team wants to share (a dedicated shared account works best).
+5. On the same page, set working hours, meeting duration, and buffer time —
+   these apply to the whole team, not per-user.
+
+Once connected:
+- **`/book`** is a public page (no login) where anyone can see open slots and
+  book a meeting directly onto the shared calendar.
+- Booking (from `/book` or via `POST /api/bookings`) automatically: creates the
+  Google Calendar event, matches or creates a CRM contact by email/phone, adds
+  a note, and auto-advances the deal to **Proposal** if it was still
+  **New**/**Contacted**.
+- Set `MAKE_BOOKING_NOTIFY_WEBHOOK_URL` to have every new booking (from either
+  the public page or the API) posted to a Make.com scenario — e.g. a Slack
+  alert or a reminder-scheduling flow — same fire-and-forget pattern as
+  `MAKE_NOTIFY_WEBHOOK_URL` above.
+- The confirmation email is currently a stub (logs only) — no email provider
+  is wired up yet; see `lib/email.ts`.
+
+### `POST /api/bookings` body
+```json
+{
+  "contact_id": "uuid",       // or omit and pass name/email/phone instead
+  "name": "Dr. Smith",
+  "email": "dr.smith@example.com",
+  "phone": "+923001234567",
+  "start": "2026-07-20T14:00:00.000Z",
+  "end": "2026-07-20T14:30:00.000Z"
+}
+```
 
 ## Notes
 - The dashboard (browser) uses Supabase Auth + Row Level Security — only signed-in

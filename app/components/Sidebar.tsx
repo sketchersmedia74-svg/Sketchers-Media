@@ -17,6 +17,8 @@ const ICONS = {
   contacts: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-3.3 3.6-6 8-6s8 2.7 8 6",
   companies: "M4 21V7l8-4 8 4v14M4 21h16M9 21v-6h6v6M9 11h.01M15 11h.01M9 15h.01M15 15h.01",
   team: "M9 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21c0-3 3-5 7-5s7 2 7 5M13 16c3.5.3 6 2.2 6 5",
+  calendarSettings: "M3 8h18M7 3v4M17 3v4M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01",
+  bookings: "M3 8h18M7 3v4M17 3v4M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 14l2 2 4-4",
   projects: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z",
   signOut: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3",
   menu: "M4 6h16M4 12h16M4 18h16",
@@ -28,6 +30,7 @@ const BASE_NAV = [
   { href: "/contacts", label: "Contacts", icon: ICONS.contacts },
   { href: "/companies", label: "Companies", icon: ICONS.companies },
   { href: "/projects", label: "Projects", icon: ICONS.projects },
+  { href: "/bookings", label: "Bookings", icon: ICONS.bookings },
 ];
 
 export default function Sidebar() {
@@ -87,7 +90,13 @@ export default function Sidebar() {
     router.push("/");
   }
 
-  const navItems = isAdmin ? [...BASE_NAV, { href: "/team", label: "Team", icon: ICONS.team }] : BASE_NAV;
+  const navItems = isAdmin
+    ? [
+        ...BASE_NAV,
+        { href: "/team", label: "Team", icon: ICONS.team },
+        { href: "/settings/calendar", label: "Calendar Settings", icon: ICONS.calendarSettings },
+      ]
+    : BASE_NAV;
 
   return (
     <div className={expanded ? "sidebar expanded" : "sidebar"}>

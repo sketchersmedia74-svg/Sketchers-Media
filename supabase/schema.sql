@@ -184,3 +184,47 @@ create policy "Authenticated team can read calls" on calls
   for select using (auth.role() = 'authenticated');
 create policy "Authenticated team can write calls" on calls
   for all using (auth.role() = 'authenticated');
+
+-- Google Calendar integration: single shared company calendar.
+-- calendar_settings holds the OAuth refresh token + shared availability config.
+-- Intentionally has NO row-level-security policies at all: it's only ever
+-- read/written via supabaseAdmin() (service role) in server routes, never via
+-- the browser client, because it stores a refresh token.
+create table if not exists calendar_settings (
+  id smallint primary key default 1 check (id = 1),
+  google_refresh_token text,
+  connected_email text,
+  calendar_id text not null default 'primary',
+  timezone text not null default 'America/New_York',
+  slot_duration_minutes int not null default 30,
+  buffer_minutes int not null default 0,
+  working_hours jsonb not null default '{
+    "mon": {"start": "09:00", "end": "17:00"}, "tue": {"start": "09:00", "end": "17:00"},
+    "wed": {"start": "09:00", "end": "17:00"}, "thu": {"start": "09:00", "end": "17:00"},
+    "fri": {"start": "09:00", "end": "17:00"}
+  }'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table calendar_settings enable row level security;
+
+-- One row per booking made through the public /book page or POST /api/bookings.
+create table if not exists bookings (
+  id uuid primary key default uuid_generate_v4(),
+  contact_id uuid references contacts(id) on delete set null,
+  deal_id uuid references deals(id) on delete set null,
+  google_event_id text,
+  google_event_link text,
+  start_time timestamptz not null,
+  end_time timestamptz not null,
+  attendee_name text,
+  attendee_email text,
+  attendee_phone text,
+  source text not null check (source in ('public_page', 'api')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_bookings_start on bookings(start_time);
+
+alter table bookings enable row level security;
+create policy "Authenticated team can read bookings" on bookings
+  for select using (auth.role() = 'authenticated');

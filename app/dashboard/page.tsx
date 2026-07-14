@@ -64,6 +64,10 @@ function DashboardContent() {
   const [form, setForm] = useState({ contact_id: "", title: "", value: "", owner: "" });
   const [teamMembers, setTeamMembers] = useState<{ id: string; email: string }[]>([]);
   const [editingOwnerDealId, setEditingOwnerDealId] = useState<string | null>(null);
+  const [editDealId, setEditDealId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", value: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
   const [lostDealId, setLostDealId] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState("");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
@@ -142,6 +146,33 @@ function DashboardContent() {
   async function updateOwner(dealId: string, ownerEmail: string) {
     await supabaseBrowser.from("deals").update({ owner: ownerEmail || null }).eq("id", dealId);
     setEditingOwnerDealId(null);
+    loadDeals();
+  }
+
+  function openEditDeal(deal: Deal) {
+    setEditForm({ title: deal.title, value: String(deal.value || 0) });
+    setEditError("");
+    setEditDealId(deal.id);
+  }
+
+  async function saveEditDeal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editDealId) return;
+    if (!editForm.title.trim()) {
+      setEditError("Deal title is required.");
+      return;
+    }
+    setEditSaving(true);
+    const { error } = await supabaseBrowser
+      .from("deals")
+      .update({ title: editForm.title.trim(), value: editForm.value ? Number(editForm.value) : 0 })
+      .eq("id", editDealId);
+    setEditSaving(false);
+    if (error) {
+      setEditError(error.message);
+      return;
+    }
+    setEditDealId(null);
     loadDeals();
   }
 
@@ -453,6 +484,42 @@ function DashboardContent() {
           </div>
         )}
 
+        {editDealId && (
+          <div className="modal-overlay" onClick={() => setEditDealId(null)}>
+            <form className="login-card" onClick={(e) => e.stopPropagation()} onSubmit={saveEditDeal}>
+              <h3 style={{ marginTop: 0 }}>Edit Deal</h3>
+              <label>Deal title</label>
+              <input
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                required
+              />
+              <label>Value ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.value}
+                onChange={(e) => setEditForm({ ...editForm, value: e.target.value })}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn" type="submit" disabled={editSaving} style={{ flex: 1 }}>
+                  {editSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setEditDealId(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+              {editError && <p className="error">{editError}</p>}
+            </form>
+          </div>
+        )}
+
         {lostDealId && (
           <div className="modal-overlay" onClick={() => setLostDealId(null)}>
             <form className="login-card" onClick={(e) => e.stopPropagation()} onSubmit={confirmLostReason}>
@@ -588,12 +655,15 @@ function DashboardContent() {
                                     </div>
                                   )}
 
-                                  <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
+                                  <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                                     {deal.contacts?.phone && (
                                       <button className="btn secondary" onClick={() => callNow(deal.contacts!.id)}>
                                         Call now
                                       </button>
                                     )}
+                                    <button className="btn secondary" onClick={() => openEditDeal(deal)}>
+                                      Edit
+                                    </button>
                                     <select
                                       value={deal.stage}
                                       onChange={(e) => moveStage(deal.id, e.target.value)}
