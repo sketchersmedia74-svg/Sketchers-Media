@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import Topbar from "../components/Topbar";
+import Sidebar from "../components/Sidebar";
 
 const NEW_PROJECT_VALUE = "__new__";
 
@@ -160,8 +160,9 @@ export default function CompaniesPage() {
   );
 
   return (
-    <div>
-      <Topbar />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
       <div className="container">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2>Companies</h2>
@@ -414,6 +415,7 @@ export default function CompaniesPage() {
             </tbody>
           </table>
         )}
+      </div>
       </div>
     </div>
   );

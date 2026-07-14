@@ -45,21 +45,23 @@ export async function GET() {
 
   // Self-heal: backfill a profiles row for any auth user that's missing one
   // (e.g. from a past failed insert, or a user created outside this route).
-  const { data: existingProfiles } = await db.from("profiles").select("id");
-  const existingIds = new Set<string>((existingProfiles ?? []).map((p: { id: string }) => p.id));
-  const missing = users.filter((u) => !existingIds.has(u.id));
+  const { data: existingProfiles } = await db.from("profiles").select("id, full_name");
+  const nameById = new Map<string, string | null>(
+    (existingProfiles ?? []).map((p: { id: string; full_name: string | null }) => [p.id, p.full_name])
+  );
+  const missing = users.filter((u) => !nameById.has(u.id));
   if (missing.length) {
     await db.from("profiles").insert(
       missing.map((u) => ({ id: u.id, email: u.email ?? "", role: "member" }))
     );
   }
 
-  const members = users.map((u) => ({ id: u.id, email: u.email }));
+  const members = users.map((u) => ({ id: u.id, email: u.email, full_name: nameById.get(u.id) || null }));
   return NextResponse.json(members);
 }
 
 // POST /api/team-members -> add a new team member by email. Admins only.
-// Body: { email }
+// Body: { email, full_name? }
 // Sends a Supabase invite email if email sending is configured; otherwise
 // creates the user directly and returns a one-time temporary password.
 // Always creates a matching profiles row (role defaults to 'member').
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
   }
 
-  const { email } = await req.json();
+  const { email, full_name } = await req.json();
   if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
 
   const db = supabaseAdmin();
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (!inviteError && inviteData.user) {
     const { error: profileError } = await db
       .from("profiles")
-      .upsert({ id: inviteData.user.id, email: inviteData.user.email ?? email, role: "member" });
+      .upsert({ id: inviteData.user.id, email: inviteData.user.email ?? email, full_name: full_name || null, role: "member" });
     if (profileError) {
       console.error(`Failed to create profiles row for ${email} (${inviteData.user.id}):`, profileError.message);
     }
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest) {
 
   const { error: profileError } = await db
     .from("profiles")
-    .upsert({ id: createData.user.id, email: createData.user.email ?? email, role: "member" });
+    .upsert({ id: createData.user.id, email: createData.user.email ?? email, full_name: full_name || null, role: "member" });
   if (profileError) {
     console.error(`Failed to create profiles row for ${email} (${createData.user.id}):`, profileError.message);
   }

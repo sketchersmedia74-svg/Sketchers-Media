@@ -2,13 +2,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import Topbar from "../components/Topbar";
+import Sidebar from "../components/Sidebar";
 
 export default function TeamPage() {
-  const [members, setMembers] = useState<{ id: string; email: string }[]>([]);
+  const [members, setMembers] = useState<{ id: string; email: string; full_name: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [result, setResult] = useState<{ email: string; invited: boolean; temporary_password?: string; profile_warning?: string } | null>(null);
@@ -47,7 +48,7 @@ export default function TeamPage() {
     const res = await fetch("/api/team-members", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify({ email: email.trim(), full_name: fullName.trim() || undefined }),
     });
     const json = await res.json();
     setSaving(false);
@@ -57,28 +58,38 @@ export default function TeamPage() {
     }
     setResult(json);
     setEmail("");
+    setFullName("");
     loadMembers();
   }
 
   if (accessDenied) {
     return (
-      <div>
-        <Topbar />
+      <div className="app-shell">
+        <Sidebar />
+        <div className="app-main">
         <div className="container">
           <h2>Team</h2>
           <p className="error">Access denied — this page is only available to admins.</p>
+        </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <Topbar />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
       <div className="container">
         <h2>Team</h2>
 
-        <form onSubmit={addMember} style={{ display: "flex", gap: 8, marginBottom: 16, maxWidth: 480 }}>
+        <form onSubmit={addMember} style={{ display: "flex", gap: 8, marginBottom: 16, maxWidth: 620 }}>
+          <input
+            placeholder="Full name (optional)"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text)" }}
+          />
           <input
             type="email"
             placeholder="teammate@example.com"
@@ -119,16 +130,18 @@ export default function TeamPage() {
 
         {loading ? <p>Loading…</p> : (
           <table>
-            <thead><tr><th>Email</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th></tr></thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.id}>
+                  <td>{m.full_name || "—"}</td>
                   <td>{m.email}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+      </div>
       </div>
     </div>
   );

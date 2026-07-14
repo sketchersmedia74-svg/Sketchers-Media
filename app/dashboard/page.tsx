@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { downloadCsv } from "@/lib/csv";
-import Topbar from "../components/Topbar";
+import Sidebar from "../components/Sidebar";
 
 const STAGES = ["New", "Contacted", "Proposal", "Won", "Lost"];
 
@@ -38,14 +38,23 @@ type Deal = {
 type SortKey = "title" | "contact" | "stage" | "value" | "owner" | "created_at";
 
 export default function Dashboard() {
+  return (
+    <Suspense fallback={<div className="app-shell"><Sidebar /><div className="app-main"><div className="container"><p>Loading…</p></div></div></div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
   const [dueTasks, setDueTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
-  const [owner, setOwner] = useState("all");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [owner, setOwner] = useState(() => searchParams.get("owner") || "all");
+  const [fromDate, setFromDate] = useState(() => searchParams.get("from") || "");
+  const [toDate, setToDate] = useState(() => searchParams.get("to") || "");
   const [view, setView] = useState<"board" | "table">("board");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortAsc, setSortAsc] = useState(false);
@@ -278,8 +287,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
-      <Topbar />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
       <div className="container">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2>Pipeline</h2>
@@ -606,6 +616,7 @@ export default function Dashboard() {
             </div>
           </DragDropContext>
         )}
+      </div>
       </div>
     </div>
   );

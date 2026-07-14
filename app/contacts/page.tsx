@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { downloadCsv, parseCsv } from "@/lib/csv";
-import Topbar from "../components/Topbar";
+import Sidebar from "../components/Sidebar";
 
 const IMPORT_FIELDS = [
   { key: "first_name", label: "First name" },
@@ -289,8 +289,9 @@ export default function ContactsPage() {
   }
 
   return (
-    <div>
-      <Topbar />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
       <div className="container">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2>Contacts</h2>
@@ -540,6 +541,7 @@ export default function ContactsPage() {
             </tbody>
           </table>
         )}
+      </div>
       </div>
     </div>
   );

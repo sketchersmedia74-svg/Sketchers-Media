@@ -8,14 +8,25 @@ create extension if not exists "uuid-ossp";
 create table if not exists profiles (
   id uuid primary key,
   email text not null,
+  full_name text,
   role text not null default 'member'
     check (role in ('admin', 'member')),
   created_at timestamptz not null default now()
 );
 
 alter table profiles enable row level security;
-create policy "Users can read their own profile" on profiles
-  for select using (auth.uid() = id);
+-- Any signed-in team member can read the whole roster (email/name/role aren't
+-- sensitive inside an internal CRM) — needed so dropdowns elsewhere in the app
+-- can show a colleague's name instead of their raw email.
+create policy "Authenticated team can read profiles" on profiles
+  for select using (auth.role() = 'authenticated');
+
+-- Users may update their own display name, but the WITH CHECK subquery reads
+-- the row's role as it stood before this statement, so a user can never use
+-- this policy to escalate their own role to admin.
+create policy "Users can update their own name" on profiles
+  for update using (auth.uid() = id)
+  with check (auth.uid() = id and role = (select p.role from profiles p where p.id = auth.uid()));
 
 -- Projects (organize leads by niche, e.g. Dentists, Chiropractors, Med Spas)
 create table if not exists projects (

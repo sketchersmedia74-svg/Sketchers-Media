@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import Topbar from "../../components/Topbar";
+import Sidebar from "../../components/Sidebar";
 
 export default function ContactDetailPage() {
   const [contact, setContact] = useState<any>(null);
@@ -128,25 +128,26 @@ export default function ContactDetailPage() {
 
   if (loading) {
     return (
-      <div>
-        <Topbar />
-        <div className="container"><p>Loading…</p></div>
+      <div className="app-shell">
+        <Sidebar />
+        <div className="app-main"><div className="container"><p>Loading…</p></div></div>
       </div>
     );
   }
 
   if (!contact) {
     return (
-      <div>
-        <Topbar />
-        <div className="container"><p>Contact not found.</p></div>
+      <div className="app-shell">
+        <Sidebar />
+        <div className="app-main"><div className="container"><p>Contact not found.</p></div></div>
       </div>
     );
   }
 
   return (
-    <div>
-      <Topbar />
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
       <div className="container">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/contacts" style={{ fontSize: 13, color: "var(--text-secondary)" }}>&larr; Back to Contacts</a>
@@ -275,6 +276,7 @@ export default function ContactDetailPage() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
