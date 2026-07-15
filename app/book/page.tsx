@@ -143,18 +143,7 @@ export default function BookPage() {
             <h3 style={{ marginBottom: 8 }}>{day}</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {daySlots.map((slot) => (
-                <button
-                  key={slot.start}
-                  onClick={() => setSelected(slot)}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: 6,
-                    border: "1px solid #5C1A2E",
-                    background: "#fff",
-                    color: "#5C1A2E",
-                    cursor: "pointer",
-                  }}
-                >
+                <button key={slot.start} className="book-slot" onClick={() => setSelected(slot)}>
                   {new Date(slot.start).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                 </button>
               ))}

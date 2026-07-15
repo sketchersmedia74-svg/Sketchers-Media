@@ -433,6 +433,39 @@ th { background: var(--table-header-bg); color: var(--text-secondary); }
 }
 .btn.secondary { background: var(--btn-secondary-bg); color: var(--btn-secondary-text); }
 
+.book-slot {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid #5C1A2E;
+  background: #fff;
+  color: #5C1A2E;
+  cursor: pointer;
+  font-size: 14px;
+  transition: color 0.25s ease, transform 0.15s ease;
+}
+.book-slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #5C1A2E;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s ease;
+}
+.book-slot:hover,
+.book-slot:focus-visible {
+  color: #fff;
+  transform: translateY(-2px);
+}
+.book-slot:hover::before,
+.book-slot:focus-visible::before {
+  transform: scaleX(1);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
