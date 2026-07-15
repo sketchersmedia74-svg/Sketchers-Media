@@ -149,11 +149,22 @@ PostgREST's GET requests, so `supabaseAdmin()` queries can keep returning a stal
 across dev-server restarts) with no error. If a future refactor touches this client
 construction, keep that fetch override — it cost a long debugging session to find once already.
 
-### 4.16 `bookings.google_event_link` added after initial schema — check for drift
-The initial Google Calendar integration only stored `google_event_id`; a `google_event_link`
-column (used by the `/bookings` page to link out to the calendar event) was added afterward.
-Per §4.5, this was applied as a manual `alter table` snippet, not a full schema.sql re-run —
-sanity-check the live DB has it before relying on that column.
+### 4.16 `bookings.google_event_link` / `bookings.timezone` added after initial schema — check for drift
+The initial Google Calendar integration only stored `google_event_id`; `google_event_link`
+(links out to the calendar event from `/bookings`) and `timezone` (the calendar's configured
+IANA timezone at booking time, so times display consistently regardless of the viewer's
+browser timezone — see §4.17) were added afterward. Per §4.5, these were applied as manual
+`alter table` snippets, not a full schema.sql re-run — sanity-check the live DB has both
+columns before relying on them.
+
+### 4.17 Booking times must always be formatted with an explicit `timeZone`
+`toLocaleString()` without a `timeZone` option uses the *viewer's browser* timezone, not the
+shared calendar's configured one. This caused the note on a contact (formatted using
+`calendar_settings.timezone`) to show a different hour — and even a different calendar day —
+than the same booking's row on `/bookings` (originally formatted with no `timeZone`, i.e. the
+viewer's local zone). Fixed by storing `timezone` on each `bookings` row at creation time and
+always passing it explicitly to `toLocaleString`. If a new place ever displays a booking time,
+use `booking.timezone`, not the browser default.
 
 ---
 

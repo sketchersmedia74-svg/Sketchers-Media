@@ -58,13 +58,15 @@ export default function BookingsPage() {
                 {bookings.map((b) => (
                   <tr key={b.id}>
                     <td>
-                      {new Date(b.start_time).toLocaleString(undefined, {
+                      {new Date(b.start_time).toLocaleString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
+                        timeZone: b.timezone || undefined,
                       })}
+                      {b.timezone && <span style={{ opacity: 0.6, fontSize: 12 }}> ({b.timezone})</span>}
                     </td>
                     <td>{b.attendee_name || "—"}</td>
                     <td>

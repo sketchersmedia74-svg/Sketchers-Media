@@ -65,6 +65,9 @@ export default function BookPage() {
     padding: "40px 20px",
   };
 
+  const visitorTimezone =
+    typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
+
   if (confirmed) {
     return (
       <div style={pageStyle}>
@@ -79,6 +82,7 @@ export default function BookPage() {
               hour: "numeric",
               minute: "2-digit",
             })}
+            {visitorTimezone && ` (${visitorTimezone})`}
           </strong>
           .
         </p>
@@ -99,6 +103,7 @@ export default function BookPage() {
             hour: "numeric",
             minute: "2-digit",
           })}
+          {visitorTimezone && <span style={{ color: "#666" }}> ({visitorTimezone})</span>}
         </p>
         <form onSubmit={submitBooking} style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 420 }}>
           <input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} required
@@ -124,6 +129,11 @@ export default function BookPage() {
   return (
     <div style={pageStyle}>
       <h1 style={{ color: "#5C1A2E" }}>Book a time with us</h1>
+      {visitorTimezone && !loadError && (
+        <p style={{ color: "#666", marginTop: -8, marginBottom: 20 }}>
+          Times shown in your local time ({visitorTimezone})
+        </p>
+      )}
       {loadError && <p style={{ color: "#b00020" }}>{loadError}</p>}
       {!loadError && !slots && <p>Loading available times…</p>}
       {!loadError && slots && slots.length === 0 && <p>No open times right now — please check back soon.</p>}

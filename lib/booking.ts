@@ -202,6 +202,7 @@ export async function createBooking(input: CreateBookingInput) {
       attendee_email: contact.email ?? null,
       attendee_phone: contact.phone ?? null,
       source: input.source,
+      timezone: settings.timezone,
     })
     .select()
     .single();

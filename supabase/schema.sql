@@ -220,6 +220,7 @@ create table if not exists bookings (
   attendee_email text,
   attendee_phone text,
   source text not null check (source in ('public_page', 'api')),
+  timezone text,
   created_at timestamptz not null default now()
 );
 
