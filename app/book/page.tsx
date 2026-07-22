@@ -22,6 +22,7 @@ export default function BookPage() {
   const [loadError, setLoadError] = useState("");
   const [selected, setSelected] = useState<Slot | null>(null);
   const [name, setName] = useState("");
+  const [clinicName, setClinicName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -48,7 +49,7 @@ export default function BookPage() {
     const res = await fetch("/api/public/bookings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ start: selected.start, end: selected.end, name, email, phone }),
+      body: JSON.stringify({ start: selected.start, end: selected.end, name, clinicName, email, phone }),
     });
     const json = await res.json();
     setSubmitting(false);
@@ -107,6 +108,8 @@ export default function BookPage() {
         </p>
         <form onSubmit={submitBooking} style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 420 }}>
           <input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} required
+            style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid #ccc" }} />
+          <input placeholder="Clinic name" value={clinicName} onChange={(e) => setClinicName(e.target.value)}
             style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid #ccc" }} />
           <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
             style={{ padding: "10px 12px", borderRadius: 6, border: "1px solid #ccc" }} />

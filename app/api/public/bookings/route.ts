@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createBooking, BookingUserError } from "@/lib/booking";
 
 // POST /api/public/bookings -> create a booking from the public /book page. No auth (public by design).
-// Body: { name, email?, phone?, start, end }
+// Body: { name, clinicName?, email?, phone?, start, end }
 export async function POST(req: NextRequest) {
   const body = await req.json();
   if (!body.start || !body.end) {
@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       start: body.start,
       end: body.end,
       name: body.name,
+      clinicName: body.clinicName,
       email: body.email,
       phone: body.phone,
       source: "public_page",

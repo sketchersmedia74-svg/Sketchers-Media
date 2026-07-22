@@ -3,7 +3,7 @@ import { checkApiKey } from "@/lib/apiAuth";
 import { createBooking } from "@/lib/booking";
 
 // POST /api/bookings -> create a booking on the shared calendar (x-api-key protected, for Make.com).
-// Body: { contact_id?, name?, email?, phone?, start, end }
+// Body: { contact_id?, name?, clinicName?, email?, phone?, start, end }
 // Either contact_id, or name (+ email/phone), must be provided.
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       start: body.start,
       end: body.end,
       name: body.name ?? "",
+      clinicName: body.clinicName,
       email: body.email,
       phone: body.phone,
       contact_id: body.contact_id,

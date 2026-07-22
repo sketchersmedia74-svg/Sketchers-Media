@@ -98,17 +98,53 @@ export async function getOpenSlots(): Promise<Slot[]> {
   });
 }
 
+async function findOrCreateCompany(db: ReturnType<typeof supabaseAdmin>, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  const { data: existing } = await db.from("companies").select("*").ilike("name", trimmed).maybeSingle();
+  if (existing) return existing;
+
+  const { data: created, error } = await db.from("companies").insert({ name: trimmed }).select().single();
+  if (error) throw new Error(error.message);
+  return created;
+}
+
 async function findOrCreateContact(
   db: ReturnType<typeof supabaseAdmin>,
-  info: { name: string; email?: string; phone?: string }
+  info: { name: string; clinicName?: string; email?: string; phone?: string }
 ) {
+  const company = info.clinicName ? await findOrCreateCompany(db, info.clinicName) : null;
+
   if (info.email) {
     const { data: existing } = await db.from("contacts").select("*").ilike("email", info.email).maybeSingle();
-    if (existing) return existing;
+    if (existing) {
+      if (company && !existing.company_id) {
+        const { data: updated } = await db
+          .from("contacts")
+          .update({ company_id: company.id })
+          .eq("id", existing.id)
+          .select()
+          .single();
+        return updated ?? existing;
+      }
+      return existing;
+    }
   }
   if (info.phone) {
     const { data: existing } = await db.from("contacts").select("*").ilike("phone", info.phone).maybeSingle();
-    if (existing) return existing;
+    if (existing) {
+      if (company && !existing.company_id) {
+        const { data: updated } = await db
+          .from("contacts")
+          .update({ company_id: company.id })
+          .eq("id", existing.id)
+          .select()
+          .single();
+        return updated ?? existing;
+      }
+      return existing;
+    }
   }
 
   const trimmedName = info.name.trim();
@@ -118,7 +154,14 @@ async function findOrCreateContact(
 
   const { data: created, error } = await db
     .from("contacts")
-    .insert({ first_name, last_name, email: info.email ?? null, phone: info.phone ?? null, source: "booking" })
+    .insert({
+      first_name,
+      last_name,
+      email: info.email ?? null,
+      phone: info.phone ?? null,
+      company_id: company?.id ?? null,
+      source: "booking",
+    })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -129,6 +172,7 @@ export type CreateBookingInput = {
   start: string;
   end: string;
   name: string;
+  clinicName?: string;
   email?: string;
   phone?: string;
   contact_id?: string;
@@ -153,14 +197,25 @@ export async function createBooking(input: CreateBookingInput) {
 
   const contact = input.contact_id
     ? (await db.from("contacts").select("*").eq("id", input.contact_id).single()).data
-    : await findOrCreateContact(db, { name: input.name, email: input.email, phone: input.phone });
+    : await findOrCreateContact(db, {
+        name: input.name,
+        clinicName: input.clinicName,
+        email: input.email,
+        phone: input.phone,
+      });
   if (!contact) throw new Error("Contact not found");
 
   const contactName = `${contact.first_name}${contact.last_name ? " " + contact.last_name : ""}`;
+  const clinicSuffix = input.clinicName ? ` (${input.clinicName})` : "";
 
+  // Google Calendar shows this same summary/description to every attendee,
+  // including the guest — so it needs to read sensibly from their side too,
+  // not just describe the meeting from the host's point of view (a title
+  // like "Meeting with {guest's own name}" reads as self-referential in the
+  // guest's own inbox).
   const event = await createCalendarEvent(settings, {
-    summary: `Meeting with ${contactName}`,
-    description: `Booked via Sketchers Media CRM (${input.source === "api" ? "API" : "public booking page"}).`,
+    summary: "Meeting with Reset Dental Media",
+    description: `With ${contactName}${clinicSuffix}. Booked via the Reset Dental Media booking page (${input.source === "api" ? "API" : "public booking page"}).`,
     start: input.start,
     end: input.end,
     attendeeEmail: contact.email ?? undefined,
@@ -179,7 +234,7 @@ export async function createBooking(input: CreateBookingInput) {
   if (!deal) {
     const { data: newDeal, error: dealError } = await db
       .from("deals")
-      .insert({ title: `Booking: ${contactName}`, contact_id: contact.id, stage: "New" })
+      .insert({ title: `Booking: ${contactName}${clinicSuffix}`, contact_id: contact.id, stage: "New" })
       .select()
       .single();
     if (dealError) throw new Error(dealError.message);
@@ -188,7 +243,7 @@ export async function createBooking(input: CreateBookingInput) {
 
   await db.from("notes").insert({
     contact_id: contact.id,
-    text: `Booked a meeting for ${new Date(input.start).toLocaleString("en-US", { timeZone: settings.timezone })} via Google Calendar booking.`,
+    text: `Booked a meeting for ${new Date(input.start).toLocaleString("en-US", { timeZone: settings.timezone })}${clinicSuffix} via Google Calendar booking.`,
     created_by: "Booking system",
   });
 
