@@ -203,8 +203,14 @@ create table if not exists calendar_settings (
     "wed": {"start": "09:00", "end": "17:00"}, "thu": {"start": "09:00", "end": "17:00"},
     "fri": {"start": "09:00", "end": "17:00"}
   }'::jsonb,
+  -- Set to true when a Google Calendar API call fails with invalid_grant
+  -- (the stored refresh token was revoked/expired) — surfaces a "Reconnect
+  -- Google Calendar" warning on the admin dashboard. Cleared automatically
+  -- the next time an admin successfully completes the OAuth connect flow.
+  needs_reconnect boolean not null default false,
   updated_at timestamptz not null default now()
 );
+alter table calendar_settings add column if not exists needs_reconnect boolean not null default false;
 alter table calendar_settings enable row level security;
 
 -- One row per booking made through the public /book page or POST /api/bookings.

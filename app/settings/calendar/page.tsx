@@ -15,6 +15,7 @@ type Settings = {
   slot_duration_minutes?: number;
   buffer_minutes?: number;
   working_hours?: WorkingHours;
+  needs_reconnect?: boolean;
 };
 
 const DAY_LABELS: { key: string; label: string }[] = [
@@ -129,6 +130,29 @@ function CalendarSettingsContent() {
           <h2>Calendar Settings</h2>
 
           {oauthError && <p className="error">Could not connect Google Calendar: {decodeURIComponent(oauthError)}</p>}
+
+          {!loading && settings?.needs_reconnect && (
+            <div
+              className="card"
+              style={{
+                marginBottom: 20,
+                maxWidth: 620,
+                background: "#3a1f1f",
+                border: "1px solid #b00020",
+              }}
+            >
+              <p style={{ margin: "0 0 10px", fontWeight: 600 }}>
+                ⚠️ Google Calendar needs to be reconnected
+              </p>
+              <p style={{ margin: "0 0 12px", fontSize: 14, opacity: 0.9 }}>
+                The connected Google account's access has expired or been revoked, so the public booking page
+                can't check availability or create events right now. Reconnect below to restore it.
+              </p>
+              <a className="btn" href="/api/calendar/oauth/start">
+                Reconnect Google Calendar
+              </a>
+            </div>
+          )}
 
           {loading ? (
             <p>Loading…</p>

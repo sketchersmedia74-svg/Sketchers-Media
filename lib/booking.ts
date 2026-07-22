@@ -7,6 +7,13 @@ const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 export type Slot = { start: string; end: string };
 
+// Thrown for booking failures that are safe to show verbatim on the public
+// /book page (plain domain messages like "that slot is taken"). Anything
+// else thrown out of getOpenSlots/createBooking — including
+// GoogleCalendarAuthError and "not connected yet" — is an infra problem and
+// should be masked by the public API routes with a generic message instead.
+export class BookingUserError extends Error {}
+
 // Returns the timezone offset, in minutes, such that: local_ms = utc_ms + offsetMinutes.
 function getTimeZoneOffsetMinutes(date: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -140,7 +147,7 @@ export async function createBooking(input: CreateBookingInput) {
   const taken = stillBusy.some((b) =>
     overlaps(requestedStart, requestedEnd, new Date(b.start).getTime(), new Date(b.end).getTime())
   );
-  if (taken) throw new Error("That time slot is no longer available. Please pick another.");
+  if (taken) throw new BookingUserError("That time slot is no longer available. Please pick another.");
 
   const db = supabaseAdmin();
 

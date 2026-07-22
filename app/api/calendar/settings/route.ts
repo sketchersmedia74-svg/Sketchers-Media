@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdminSession } from "@/lib/adminAuth";
+import { checkAdminSession } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // GET /api/calendar/settings -> connection status + shared availability config.
 // Never returns the refresh token itself.
 export async function GET() {
-  const admin = await requireAdminSession();
-  if (!admin) return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
+  const admin = await checkAdminSession();
+  if (admin.ok === false) {
+    console.error(`GET /api/calendar/settings: denied (${admin.reason})`);
+    const status = admin.reason === "no_session" ? 401 : 403;
+    return NextResponse.json(
+      { error: admin.reason === "no_session" ? "Not signed in" : "Forbidden: admin access required" },
+      { status }
+    );
+  }
 
   const db = supabaseAdmin();
   const { data } = await db.from("calendar_settings").select("*").eq("id", 1).maybeSingle();
@@ -22,8 +29,15 @@ export async function GET() {
 // PATCH /api/calendar/settings -> update shared availability config.
 // Body: { calendar_id?, timezone?, slot_duration_minutes?, buffer_minutes?, working_hours? }
 export async function PATCH(req: NextRequest) {
-  const admin = await requireAdminSession();
-  if (!admin) return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
+  const admin = await checkAdminSession();
+  if (admin.ok === false) {
+    console.error(`PATCH /api/calendar/settings: denied (${admin.reason})`);
+    const status = admin.reason === "no_session" ? 401 : 403;
+    return NextResponse.json(
+      { error: admin.reason === "no_session" ? "Not signed in" : "Forbidden: admin access required" },
+      { status }
+    );
+  }
 
   const body = await req.json();
   const allowed = ["calendar_id", "timezone", "slot_duration_minutes", "buffer_minutes", "working_hours"];

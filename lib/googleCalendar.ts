@@ -9,7 +9,30 @@ export type CalendarSettings = {
   slot_duration_minutes: number;
   buffer_minutes: number;
   working_hours: Record<string, { start: string; end: string } | undefined>;
+  needs_reconnect?: boolean;
 };
+
+// Thrown when a Google Calendar API call fails because the stored refresh
+// token has been revoked/expired (invalid_grant) — callers (the public
+// booking routes) should catch this and show a generic "temporarily
+// unavailable" message rather than leaking Google's raw OAuth error.
+export class GoogleCalendarAuthError extends Error {}
+
+function isInvalidGrantError(err: any): boolean {
+  const code = err?.response?.data?.error;
+  return code === "invalid_grant" || /invalid_grant/i.test(err?.message || "");
+}
+
+// Flags calendar_settings so the admin dashboard can show a "Reconnect
+// Google Calendar" banner. Fire-and-forget: this is a best-effort UX signal,
+// not something that should itself fail the caller's request.
+async function flagNeedsReconnect() {
+  try {
+    await supabaseAdmin().from("calendar_settings").update({ needs_reconnect: true }).eq("id", 1);
+  } catch (err) {
+    console.error("Failed to flag calendar_settings.needs_reconnect:", err);
+  }
+}
 
 // Reads the single-row shared calendar config. Only ever called from server
 // routes via supabaseAdmin() — never expose this table to the browser client.
@@ -56,6 +79,7 @@ export async function completeOAuth(code: string): Promise<void> {
     id: 1,
     google_refresh_token: tokens.refresh_token,
     connected_email: userInfo.email ?? null,
+    needs_reconnect: false,
     updated_at: new Date().toISOString(),
   });
 }
@@ -78,15 +102,23 @@ export async function getFreeBusy(
 ): Promise<{ start: string; end: string }[]> {
   const auth = await authorizedClient(settings);
   const calendar = google.calendar({ version: "v3", auth });
-  const res = await calendar.freebusy.query({
-    requestBody: {
-      timeMin,
-      timeMax,
-      items: [{ id: settings.calendar_id }],
-    },
-  });
-  const busy = res.data.calendars?.[settings.calendar_id]?.busy ?? [];
-  return busy.map((b) => ({ start: b.start!, end: b.end! }));
+  try {
+    const res = await calendar.freebusy.query({
+      requestBody: {
+        timeMin,
+        timeMax,
+        items: [{ id: settings.calendar_id }],
+      },
+    });
+    const busy = res.data.calendars?.[settings.calendar_id]?.busy ?? [];
+    return busy.map((b) => ({ start: b.start!, end: b.end! }));
+  } catch (err) {
+    if (isInvalidGrantError(err)) {
+      await flagNeedsReconnect();
+      throw new GoogleCalendarAuthError("Google Calendar authorization has expired and needs to be reconnected.");
+    }
+    throw err;
+  }
 }
 
 export async function createCalendarEvent(
@@ -95,15 +127,23 @@ export async function createCalendarEvent(
 ): Promise<{ id: string; htmlLink: string | null }> {
   const auth = await authorizedClient(settings);
   const calendar = google.calendar({ version: "v3", auth });
-  const res = await calendar.events.insert({
-    calendarId: settings.calendar_id,
-    requestBody: {
-      summary: event.summary,
-      description: event.description,
-      start: { dateTime: event.start, timeZone: settings.timezone },
-      end: { dateTime: event.end, timeZone: settings.timezone },
-      attendees: event.attendeeEmail ? [{ email: event.attendeeEmail }] : undefined,
-    },
-  });
-  return { id: res.data.id!, htmlLink: res.data.htmlLink ?? null };
+  try {
+    const res = await calendar.events.insert({
+      calendarId: settings.calendar_id,
+      requestBody: {
+        summary: event.summary,
+        description: event.description,
+        start: { dateTime: event.start, timeZone: settings.timezone },
+        end: { dateTime: event.end, timeZone: settings.timezone },
+        attendees: event.attendeeEmail ? [{ email: event.attendeeEmail }] : undefined,
+      },
+    });
+    return { id: res.data.id!, htmlLink: res.data.htmlLink ?? null };
+  } catch (err) {
+    if (isInvalidGrantError(err)) {
+      await flagNeedsReconnect();
+      throw new GoogleCalendarAuthError("Google Calendar authorization has expired and needs to be reconnected.");
+    }
+    throw err;
+  }
 }

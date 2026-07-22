@@ -12,6 +12,13 @@ export async function GET() {
     const slots = await getOpenSlots();
     return NextResponse.json(slots);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to load availability" }, { status: 500 });
+    // Anything reaching here is an infra problem (Google Calendar not
+    // connected, or its token expired/revoked) — never leak the raw error
+    // (e.g. Google's "invalid_grant") to an external visitor.
+    console.error("GET /api/public/availability failed:", err);
+    return NextResponse.json(
+      { error: "Booking temporarily unavailable, please check back soon." },
+      { status: 503 }
+    );
   }
 }

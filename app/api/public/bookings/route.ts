@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createBooking } from "@/lib/booking";
+import { createBooking, BookingUserError } from "@/lib/booking";
 
 // POST /api/public/bookings -> create a booking from the public /book page. No auth (public by design).
 // Body: { name, email?, phone?, start, end }
@@ -26,6 +26,17 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json(result, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to create booking" }, { status: 400 });
+    // BookingUserError messages (e.g. "that slot is taken") are plain domain
+    // text, safe to show as-is. Anything else — Google Calendar not
+    // connected, an expired/revoked token, or any other infra failure — must
+    // never surface its raw error message to an external visitor.
+    if (err instanceof BookingUserError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    console.error("POST /api/public/bookings failed:", err);
+    return NextResponse.json(
+      { error: "Booking temporarily unavailable, please check back soon." },
+      { status: 503 }
+    );
   }
 }
