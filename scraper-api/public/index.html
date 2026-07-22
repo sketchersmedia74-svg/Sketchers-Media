@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dentist Scraper</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --accent: #5C8AE6;
+    --accent-hover: #7aa0ec;
+    --good: #4caf7d;
+    --bad: #e2604f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .status { font-size: 13px; color: var(--muted); }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 28px 60px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=number], input[type=password] {
+    width: 100%;
+    padding: 9px 10px;
+    background: #101216;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 180px; margin-bottom: 12px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 16px; }
+  .checkbox-row input { width: auto; }
+  .checkbox-row label { margin: 0; color: var(--text); font-size: 14px; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled { background: #3a3f4a; cursor: not-allowed; }
+  button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button.secondary:hover { background: #1e222b; }
+  .summary { display: flex; gap: 24px; margin: 16px 0; flex-wrap: wrap; }
+  .summary .stat { font-size: 13px; color: var(--muted); }
+  .summary .stat b { display: block; font-size: 22px; color: var(--text); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  td a { color: var(--accent); text-decoration: none; }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  .locations-list { max-height: 200px; overflow-y: auto; font-size: 13px; color: var(--muted); }
+  .locations-list div { padding: 3px 0; }
+  .locations-list div.current { color: var(--good); font-weight: 600; }
+  .error-box { background: #2a1414; border: 1px solid var(--bad); color: #f3b3ac; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+  .badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #20262f; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🦷 Dentist Scraper</h1>
+  <div class="status" id="healthStatus">checking server…</div>
+</header>
+
+<main>
+
+  <div class="panel">
+    <h2>Connection</h2>
+    <div class="row">
+      <div>
+        <label for="serverUrl">Server URL</label>
+        <input type="text" id="serverUrl" placeholder="http://localhost:4100" />
+      </div>
+      <div>
+        <label for="apiKey">API Key (x-api-key)</label>
+        <input type="password" id="apiKey" placeholder="your SCRAPER_API_KEY" />
+      </div>
+    </div>
+    <button class="secondary" id="saveConnBtn">Save</button>
+  </div>
+
+  <div class="panel">
+    <h2>Run a scrape</h2>
+    <div class="checkbox-row">
+      <input type="checkbox" id="useRotation" checked />
+      <label for="useRotation">Auto-pick next location from rotation list</label>
+    </div>
+    <div class="row">
+      <div>
+        <label for="query">Search query (leave blank if using rotation)</label>
+        <input type="text" id="query" placeholder="dentists in Austin, TX" disabled />
+      </div>
+      <div>
+        <label for="limit">Limit</label>
+        <input type="number" id="limit" value="20" min="1" max="200" />
+      </div>
+    </div>
+    <button id="runBtn">Run scrape</button>
+    <span class="badge" id="runningBadge" style="display:none;">Scraping… this can take a minute or two</span>
+    <div class="error-box" id="errorBox" style="display:none;"></div>
+  </div>
+
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <h2>Results</h2>
+    <div class="summary">
+      <div class="stat"><b id="statQuery">—</b>query used</div>
+      <div class="stat"><b id="statTotal">—</b>found this run</div>
+      <div class="stat"><b id="statSeen">—</b>already seen (skipped)</div>
+      <div class="stat"><b id="statNew">—</b>new</div>
+    </div>
+    <div class="toolbar">
+      <button class="secondary" id="downloadBtn">Download CSV</button>
+    </div>
+    <table id="resultsTable">
+      <thead>
+        <tr><th>Name</th><th>Phone</th><th>Email</th><th>Website</th><th>Address</th><th>Rating</th></tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+    <div class="empty" id="emptyMsg" style="display:none;">No new listings — everything found this run was already seen before.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Location rotation queue</h2>
+    <button class="secondary" id="loadLocationsBtn">Load queue</button>
+    <div class="locations-list" id="locationsList" style="margin-top:12px;"></div>
+  </div>
+
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function getConn() {
+  return {
+    url: (localStorage.getItem("scraper_url") || $("serverUrl").value || "").replace(/\/$/, ""),
+    key: localStorage.getItem("scraper_key") || $("apiKey").value || "",
+  };
+}
+
+$("serverUrl").value = localStorage.getItem("scraper_url") || "http://localhost:4100";
+$("apiKey").value = localStorage.getItem("scraper_key") || "";
+
+$("saveConnBtn").onclick = () => {
+  localStorage.setItem("scraper_url", $("serverUrl").value.trim());
+  localStorage.setItem("scraper_key", $("apiKey").value.trim());
+  checkHealth();
+};
+
+$("useRotation").onchange = (e) => {
+  $("query").disabled = e.target.checked;
+};
+
+async function checkHealth() {
+  const { url } = getConn();
+  const el = $("healthStatus");
+  if (!url) { el.textContent = "no server URL set"; return; }
+  try {
+    const res = await fetch(url + "/health");
+    el.textContent = res.ok ? "● server online" : "● server unreachable";
+    el.style.color = res.ok ? "#4caf7d" : "#e2604f";
+  } catch {
+    el.textContent = "● server unreachable";
+    el.style.color = "#e2604f";
+  }
+}
+checkHealth();
+
+let lastResults = [];
+
+$("runBtn").onclick = async () => {
+  const { url, key } = getConn();
+  const errorBox = $("errorBox");
+  errorBox.style.display = "none";
+  if (!url || !key) {
+    errorBox.textContent = "Set the server URL and API key first (Connection panel above).";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  const body = { limit: parseInt($("limit").value, 10) || 20 };
+  if (!$("useRotation").checked) {
+    const q = $("query").value.trim();
+    if (!q) {
+      errorBox.textContent = "Enter a search query, or check 'use rotation'.";
+      errorBox.style.display = "block";
+      return;
+    }
+    body.query = q;
+  }
+
+  $("runBtn").disabled = true;
+  $("runningBadge").style.display = "inline-block";
+
+  try {
+    const res = await fetch(url + "/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": key },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    renderResults(data);
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.style.display = "block";
+  } finally {
+    $("runBtn").disabled = false;
+    $("runningBadge").style.display = "none";
+  }
+};
+
+function renderResults(data) {
+  lastResults = data.results || [];
+  $("resultsPanel").style.display = "block";
+  $("statQuery").textContent = data.query || "—";
+  $("statTotal").textContent = data.totalFound ?? data.count ?? "—";
+  $("statSeen").textContent = data.alreadySeenCount ?? 0;
+  $("statNew").textContent = data.count ?? lastResults.length;
+
+  const body = $("resultsBody");
+  body.innerHTML = "";
+  if (lastResults.length === 0) {
+    $("emptyMsg").style.display = "block";
+    return;
+  }
+  $("emptyMsg").style.display = "none";
+  for (const row of lastResults) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(row.name || "")}</td>
+      <td>${escapeHtml(row.phone || "—")}</td>
+      <td>${escapeHtml(row.email || "—")}</td>
+      <td>${row.website ? `<a href="${escapeHtml(row.website)}" target="_blank">website</a>` : "—"}</td>
+      <td>${escapeHtml(row.address || "—")}</td>
+      <td>${escapeHtml(row.rating || "—")}</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+$("downloadBtn").onclick = () => {
+  if (lastResults.length === 0) return;
+  const header = ["name", "phone", "website", "email", "address", "rating", "mapsUrl"];
+  const csvRow = (fields) => fields.map((f) => {
+    const s = (f ?? "").toString().replace(/"/g, '""');
+    return /[",\n]/.test(s) ? `"${s}"` : s;
+  }).join(",");
+  const lines = [csvRow(header), ...lastResults.map((r) => csvRow(header.map((h) => r[h])))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "scraped-listings.csv";
+  a.click();
+};
+
+$("loadLocationsBtn").onclick = async () => {
+  const { url, key } = getConn();
+  const list = $("locationsList");
+  list.innerHTML = "Loading…";
+  try {
+    const res = await fetch(url + "/locations", { headers: { "x-api-key": key } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load");
+    list.innerHTML = data.locations.map((loc) => `<div>${escapeHtml(loc)}</div>`).join("") || "<div>Empty list</div>";
+  } catch (err) {
+    list.innerHTML = `<div style="color:#e2604f">${escapeHtml(err.message)}</div>`;
+  }
+};
+</script>
+
+</body>
+</html>

@@ -1,5 +1,8 @@
 # dependencies
 /node_modules
+scraper-api/node_modules
+scraper-api/seen.json
+scraper-api/rotationState.json
 
 # next.js
 /.next/
