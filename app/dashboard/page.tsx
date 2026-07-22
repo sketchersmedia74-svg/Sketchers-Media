@@ -63,6 +63,7 @@ function DashboardContent() {
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState({ contact_id: "", title: "", value: "", owner: "" });
   const [teamMembers, setTeamMembers] = useState<{ id: string; email: string }[]>([]);
+  const [teamNames, setTeamNames] = useState<{ id: string; name: string }[]>([]);
   const [editingOwnerDealId, setEditingOwnerDealId] = useState<string | null>(null);
   const [editDealId, setEditDealId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: "", value: "" });
@@ -95,6 +96,8 @@ function DashboardContent() {
       await loadDueTasks();
       const teamRes = await fetch("/api/team-members");
       if (teamRes.ok) setTeamMembers(await teamRes.json());
+      const namesRes = await fetch("/api/team-names");
+      if (namesRes.ok) setTeamNames(await namesRes.json());
     })();
   }, []);
 
@@ -233,6 +236,14 @@ function DashboardContent() {
   }
 
   const owners = Array.from(new Set(deals.map((d) => d.owner).filter(Boolean))) as string[];
+
+  // Combines actual login accounts (identified by email) with name-only
+  // roster entries (for teams sharing a single login) into one assignable
+  // owner list for the dropdowns below.
+  const ownerOptions = [
+    ...teamMembers.map((m) => m.email),
+    ...teamNames.map((n) => n.name),
+  ];
 
   const now = new Date();
   const monthTotal = deals.filter((d) => {
@@ -462,8 +473,8 @@ function DashboardContent() {
                 style={{ width: "100%", padding: 10, margin: "6px 0 14px", borderRadius: 6, border: "1px solid #ddd" }}
               >
                 <option value="">— Unassigned —</option>
-                {teamMembers.map((m) => (
-                  <option key={m.id} value={m.email}>{m.email}</option>
+                {ownerOptions.map((o) => (
+                  <option key={o} value={o}>{o}</option>
                 ))}
               </select>
               <div style={{ display: "flex", gap: 8 }}>
@@ -621,8 +632,8 @@ function DashboardContent() {
                                         style={{ fontSize: 12 }}
                                       >
                                         <option value="">— Unassigned —</option>
-                                        {teamMembers.map((m) => (
-                                          <option key={m.id} value={m.email}>{m.email}</option>
+                                        {ownerOptions.map((o) => (
+                                          <option key={o} value={o}>{o}</option>
                                         ))}
                                       </select>
                                     ) : (

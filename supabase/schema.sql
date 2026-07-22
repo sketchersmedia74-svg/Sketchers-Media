@@ -28,6 +28,25 @@ create policy "Users can update their own name" on profiles
   for update using (auth.uid() = id)
   with check (auth.uid() = id and role = (select p.role from profiles p where p.id = auth.uid()));
 
+-- Name-only roster for attributing deals/notes to a specific person when
+-- several team members share one login (profiles/auth.users requires a
+-- unique email per login account, which doesn't fit that setup). These are
+-- plain display names with no login of their own — just something to pick
+-- in the Owner dropdown so "who actually worked this deal" survives a
+-- shared account, even though the CRM session itself can't tell who's
+-- currently typing.
+create table if not exists team_names (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table team_names enable row level security;
+create policy "Authenticated team can read team_names" on team_names
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write team_names" on team_names
+  for all using (auth.role() = 'authenticated');
+
 -- Projects (organize leads by niche, e.g. Dentists, Chiropractors, Med Spas)
 create table if not exists projects (
   id uuid primary key default uuid_generate_v4(),
