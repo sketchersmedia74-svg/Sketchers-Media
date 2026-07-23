@@ -23,7 +23,7 @@ import { checkApiKey } from "@/lib/apiAuth";
  *   "duration_seconds": 132,
  *   "summary": "Prospect is interested, wants a demo next Tuesday.",
  *   "transcript": "full transcript text...",   // optional
- *   "outcome": "interested",                   // optional: interested / no_answer / callback_requested / not_interested
+ *   "outcome": "interested",                   // optional: interested / no_answer / voicemail / callback_requested / not_interested
  *   "captured_email": "owner@practice.com",     // optional — email the AI captured live on the call;
  *                                                //   automatically saved onto the contact record
  *   "recording_url": "https://...",            // optional
@@ -33,10 +33,24 @@ import { checkApiKey } from "@/lib/apiAuth";
  * On success, if the related deal is still in "New" stage, it's auto-moved
  * to "Contacted" so the pipeline reflects that an AI call has happened.
  *
+ * outcome "voicemail": logs a note on the contact ("Call went to
+ * voicemail.") and schedules an automatic redial 1-2 days out (see
+ * next_retry_at below) — same retry treatment as "no_answer". After 3
+ * straight voicemail/no_answer attempts, max_attempts_reached is set and no
+ * further redial is scheduled.
+ *
+ * GET /api/contacts/due-for-retry picks up any contact whose next_retry_at
+ * has passed — point a daily Make.com schedule at it to fetch numbers ready
+ * to be called again.
+ *
  * If outcome is "interested", this also notifies your team by forwarding
  * the call details to MAKE_NOTIFY_WEBHOOK_URL — point that at a Make.com
  * scenario with an Email/Gmail/Slack module to alert whoever owns the deal.
  */
+
+const RETRYABLE_OUTCOMES = ["no_answer", "voicemail"];
+const MAX_ATTEMPTS = 3;
+
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
   if (authError) return authError;
@@ -68,7 +82,8 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Track how many AI call attempts have been made against this contact, and
-  // flag it once 3 straight no-answers pile up so automated dialers can skip it.
+  // flag it once 3 straight no-answer/voicemail attempts pile up so
+  // automated dialers can skip it.
   const { data: contactForAttempts } = await db
     .from("contacts")
     .select("call_attempts")
@@ -76,14 +91,37 @@ export async function POST(req: NextRequest) {
     .single();
 
   const nextAttempts = (contactForAttempts?.call_attempts ?? 0) + 1;
+  const isRetryable = RETRYABLE_OUTCOMES.includes(body.outcome);
+  const maxAttemptsReached = nextAttempts >= MAX_ATTEMPTS && isRetryable;
+
   const contactUpdate: Record<string, any> = { call_attempts: nextAttempts };
-  if (nextAttempts >= 3 && body.outcome === "no_answer") {
+  if (maxAttemptsReached) {
     contactUpdate.max_attempts_reached = true;
   }
   if (body.captured_email) {
     contactUpdate.email = body.captured_email;
   }
+  // Schedule an automatic redial 1-2 days out for a no-answer/voicemail,
+  // unless this was the 3rd straight attempt (max_attempts_reached above).
+  // Any other outcome (answered, interested, not_interested, ...) clears a
+  // previously-scheduled retry since the contact was reached.
+  if (isRetryable && !maxAttemptsReached) {
+    const retryDelayMs = (24 + Math.random() * 24) * 60 * 60 * 1000; // 1-2 days
+    contactUpdate.next_retry_at = new Date(Date.now() + retryDelayMs).toISOString();
+  } else {
+    contactUpdate.next_retry_at = null;
+  }
   await db.from("contacts").update(contactUpdate).eq("id", body.contact_id);
+
+  if (body.outcome === "voicemail") {
+    await db.from("notes").insert({
+      contact_id: body.contact_id,
+      text: maxAttemptsReached
+        ? "Call went to voicemail. Max call attempts reached — no further automatic redial."
+        : "Call went to voicemail. Will automatically redial in 1-2 days.",
+      created_by: "AI Call System",
+    });
+  }
 
   // Auto-advance the deal from "New" -> "Contacted" once an AI call is logged.
   await db

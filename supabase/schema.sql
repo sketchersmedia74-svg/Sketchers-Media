@@ -87,8 +87,17 @@ create table if not exists contacts (
   call_attempts int not null default 0,
   max_attempts_reached boolean not null default false,
   do_not_call boolean not null default false,
+  -- Set by POST /api/calls to ~1-2 days from now whenever a call outcome is
+  -- "no_answer" or "voicemail" (and the 3-attempt cap hasn't been hit yet).
+  -- GET /api/contacts/due-for-retry surfaces contacts once this has passed,
+  -- for a scheduled Make.com scenario to redial automatically. Cleared
+  -- (set null) once any other outcome is logged.
+  next_retry_at timestamptz,
   created_at timestamptz not null default now()
 );
+alter table contacts add column if not exists next_retry_at timestamptz;
+
+create index if not exists idx_contacts_next_retry_at on contacts(next_retry_at);
 
 -- Deals (pipeline)
 create table if not exists deals (
@@ -152,7 +161,7 @@ create table if not exists calls (
   duration_seconds int,
   summary text,                       -- AI-generated call summary
   transcript text,                    -- full transcript (optional)
-  outcome text,                       -- e.g. "interested", "no answer", "callback requested"
+  outcome text,                       -- e.g. "interested", "no_answer", "voicemail", "callback_requested", "not_interested"
   recording_url text,
   raw_payload jsonb,                  -- original webhook payload, kept for debugging
   created_at timestamptz not null default now()
