@@ -22,6 +22,10 @@ export async function GET(req: NextRequest) {
 // POST /api/contacts -> create a contact
 // Body: { first_name, last_name?, email?, phone?, company_id?, owner?, source? }
 // source: e.g. "apify_scrape" for Make.com-tagged scraped leads; defaults to "manual".
+// Rejects with 409 if a contact with the same phone already exists (same
+// duplicate-phone check the manual "Add Contact" form and CSV import already
+// apply — this endpoint was the one gap, since Make.com/API callers had no
+// such guard at all).
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
   if (authError) return authError;
@@ -32,6 +36,23 @@ export async function POST(req: NextRequest) {
   }
 
   const db = supabaseAdmin();
+
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+  if (phone) {
+    const { data: existing } = await db
+      .from("contacts")
+      .select("id, first_name, last_name, phone")
+      .eq("phone", phone)
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json(
+        { error: "A contact with this phone number already exists.", existing_contact: existing },
+        { status: 409 }
+      );
+    }
+  }
+
   const { data, error } = await db
     .from("contacts")
     .insert({ ...body, source: body.source || "manual" })
