@@ -38,6 +38,10 @@ export default function BookingsPage() {
       <div className="app-main">
         <div className="container">
           <h2>Bookings</h2>
+          <p style={{ opacity: 0.7, fontSize: 13, marginTop: -8 }}>
+            Times shown in your local time
+            {typeof Intl !== "undefined" && ` (${Intl.DateTimeFormat().resolvedOptions().timeZone})`}
+          </p>
           {loading ? (
             <p>Loading…</p>
           ) : bookings.length === 0 ? (
@@ -64,9 +68,7 @@ export default function BookingsPage() {
                         day: "numeric",
                         hour: "numeric",
                         minute: "2-digit",
-                        timeZone: b.timezone || undefined,
                       })}
-                      {b.timezone && <span style={{ opacity: 0.6, fontSize: 12 }}> ({b.timezone})</span>}
                     </td>
                     <td>{b.attendee_name || "—"}</td>
                     <td>
