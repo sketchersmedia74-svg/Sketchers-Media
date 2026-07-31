@@ -123,11 +123,12 @@ export async function getFreeBusy(
 
 export async function createCalendarEvent(
   settings: CalendarSettings,
-  event: { summary: string; description?: string; start: string; end: string; attendeeEmail?: string }
+  event: { summary: string; description?: string; start: string; end: string; attendeeEmails?: string[] }
 ): Promise<{ id: string; htmlLink: string | null }> {
   const auth = await authorizedClient(settings);
   const calendar = google.calendar({ version: "v3", auth });
   try {
+    const attendees = (event.attendeeEmails ?? []).filter(Boolean);
     const res = await calendar.events.insert({
       calendarId: settings.calendar_id,
       requestBody: {
@@ -135,7 +136,7 @@ export async function createCalendarEvent(
         description: event.description,
         start: { dateTime: event.start, timeZone: settings.timezone },
         end: { dateTime: event.end, timeZone: settings.timezone },
-        attendees: event.attendeeEmail ? [{ email: event.attendeeEmail }] : undefined,
+        attendees: attendees.length ? attendees.map((email) => ({ email })) : undefined,
       },
     });
     return { id: res.data.id!, htmlLink: res.data.htmlLink ?? null };

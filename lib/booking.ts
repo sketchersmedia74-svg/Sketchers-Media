@@ -213,12 +213,21 @@ export async function createBooking(input: CreateBookingInput) {
   // not just describe the meeting from the host's point of view (a title
   // like "Meeting with {guest's own name}" reads as self-referential in the
   // guest's own inbox).
+  // Team notification emails (e.g. bookings@resetdentalmedia.com) are added
+  // as extra attendees on the same calendar event, so the team gets the
+  // exact same Google Calendar invite email as the client — no separate
+  // email system needed. Comma-separated in TEAM_NOTIFICATION_EMAIL.
+  const teamEmails = (process.env.TEAM_NOTIFICATION_EMAIL || "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+
   const event = await createCalendarEvent(settings, {
     summary: "Meeting with Reset Dental Media",
     description: `With ${contactName}${clinicSuffix}. Booked via the Reset Dental Media booking page (${input.source === "api" ? "API" : "public booking page"}).`,
     start: input.start,
     end: input.end,
-    attendeeEmail: contact.email ?? undefined,
+    attendeeEmails: [...(contact.email ? [contact.email] : []), ...teamEmails],
   });
 
   const { data: openDeal } = await db
@@ -292,8 +301,10 @@ export async function createBooking(input: CreateBookingInput) {
   await sendBookingConfirmationEmail({
     attendeeName: contactName,
     attendeeEmail: contact.email ?? null,
+    clinicName: input.clinicName,
     startTime: input.start,
     endTime: input.end,
+    timezone: settings.timezone,
   });
 
   return { booking, contact, deal, calendar_event_link: event.htmlLink };
