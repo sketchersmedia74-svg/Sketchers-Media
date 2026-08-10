@@ -83,6 +83,7 @@ function OverviewContent() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [closedStageNames, setClosedStageNames] = useState<Set<string>>(new Set(["Won", "Lost"]));
   const [selectedRep, setSelectedRep] = useState(() => searchParams.get("rep") || "");
   const [ownerNames, setOwnerNames] = useState<Map<string, string>>(new Map());
   const [userEmail, setUserEmail] = useState("");
@@ -175,6 +176,13 @@ function OverviewContent() {
         .select("id, contact_id, created_at");
       setNotes(noteData || []);
 
+      const { data: stageData } = await supabaseBrowser
+        .from("pipeline_stages")
+        .select("name, is_won, is_lost");
+      setClosedStageNames(
+        new Set((stageData || []).filter((s) => s.is_won || s.is_lost).map((s) => s.name))
+      );
+
       setLoading(false);
     })();
   }, []);
@@ -214,7 +222,7 @@ function OverviewContent() {
   const hotDeals = filteredDeals.filter((d) => latestOutcome(d) === "interested").length;
   const totalDeals = filteredDeals.length;
   const stalledDeals = filteredDeals.filter(
-    (d) => !["Won", "Lost"].includes(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff
+    (d) => !closedStageNames.has(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff
   ).length;
 
   // Prior-period comparison: only meaningful once a concrete date range is picked.
@@ -239,7 +247,7 @@ function OverviewContent() {
     prevHotDeals = prevDeals.filter((d) => latestOutcome(d) === "interested").length;
     prevTotalDeals = prevDeals.length;
     prevStalledDeals = prevDeals.filter(
-      (d) => !["Won", "Lost"].includes(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff
+      (d) => !closedStageNames.has(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff
     ).length;
   }
 
@@ -328,7 +336,7 @@ function OverviewContent() {
         items.push({ id: `task-${t.id}`, text: `Overdue follow-up with ${name}: ${t.description}`, href: `/contacts/${t.contact_id}` });
       });
     filteredDeals
-      .filter((d) => !["Won", "Lost"].includes(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff)
+      .filter((d) => !closedStageNames.has(d.stage) && new Date(d.updated_at).getTime() < stalledCutoff)
       .forEach((d) => {
         items.push({ id: `stalled-${d.id}`, text: `Deal "${d.title}" has stalled (no activity in ${STALLED_DAYS}+ days)`, href: d.contacts ? `/contacts/${d.contacts.id}` : "/dashboard" });
       });

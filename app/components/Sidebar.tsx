@@ -18,6 +18,7 @@ const ICONS = {
   companies: "M4 21V7l8-4 8 4v14M4 21h16M9 21v-6h6v6M9 11h.01M15 11h.01M9 15h.01M15 15h.01",
   team: "M9 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 21c0-3 3-5 7-5s7 2 7 5M13 16c3.5.3 6 2.2 6 5",
   calendarSettings: "M3 8h18M7 3v4M17 3v4M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01",
+  pipelineSettings: "M4 4h16v4H4zM4 10h10v4H4zM4 16h6v4H4z",
   bookings: "M3 8h18M7 3v4M17 3v4M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM8 14l2 2 4-4",
   projects: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z",
   signOut: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3",
@@ -94,6 +95,7 @@ export default function Sidebar() {
     ? [
         ...BASE_NAV,
         { href: "/team", label: "Team", icon: ICONS.team },
+        { href: "/settings/pipelines", label: "Pipelines", icon: ICONS.pipelineSettings },
         { href: "/settings/calendar", label: "Calendar Settings", icon: ICONS.calendarSettings },
       ]
     : BASE_NAV;

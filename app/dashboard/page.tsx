@@ -4,9 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { downloadCsv } from "@/lib/csv";
+import { stageColor } from "@/lib/stageColor";
 import Sidebar from "../components/Sidebar";
-
-const STAGES = ["New", "Contacted", "Proposal", "Won", "Lost"];
 
 const LOST_REASONS = [
   { value: "not_interested", label: "Not interested" },
@@ -21,6 +20,7 @@ type Deal = {
   title: string;
   value: number;
   stage: string;
+  pipeline_id: string | null;
   owner: string | null;
   lost_reason: string | null;
   created_at: string;
@@ -34,6 +34,9 @@ type Deal = {
     calls: { summary: string; call_date: string; outcome: string }[];
   } | null;
 };
+
+type Pipeline = { id: string; name: string };
+type Stage = { id: string; pipeline_id: string; name: string; position: number; is_won: boolean; is_lost: boolean };
 
 type SortKey = "title" | "contact" | "stage" | "value" | "owner" | "created_at";
 
@@ -71,10 +74,14 @@ function DashboardContent() {
   const [editError, setEditError] = useState("");
   const [lostDealId, setLostDealId] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState("");
+  const [lostStageName, setLostStageName] = useState("");
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [myDealsOnly, setMyDealsOnly] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [projectFilter, setProjectFilter] = useState("all");
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [pipelineId, setPipelineId] = useState<string>(() => searchParams.get("pipeline") || "");
   const router = useRouter();
 
   useEffect(() => {
@@ -82,7 +89,19 @@ function DashboardContent() {
       const { data: { session } } = await supabaseBrowser.auth.getSession();
       if (!session) { router.push("/"); return; }
       setCurrentUserEmail(session.user.email || null);
-      await loadDeals();
+
+      const { data: pipelineData } = await supabaseBrowser
+        .from("pipelines")
+        .select("id, name")
+        .order("created_at", { ascending: true });
+      setPipelines(pipelineData || []);
+
+      const initialPipelineId =
+        (pipelineData || []).find((p) => p.id === pipelineId)?.id || pipelineData?.[0]?.id || "";
+      setPipelineId(initialPipelineId);
+      await loadStages(initialPipelineId);
+      await loadDeals(initialPipelineId);
+
       const { data: contactData } = await supabaseBrowser
         .from("contacts")
         .select("id, first_name, last_name")
@@ -133,7 +152,8 @@ function DashboardContent() {
       title: form.title.trim(),
       contact_id: form.contact_id,
       value: form.value ? Number(form.value) : 0,
-      stage: "New",
+      pipeline_id: pipelineId || null,
+      stage: stages[0]?.name || "New",
       owner: form.owner || null,
     });
     setSaving(false);
@@ -179,35 +199,63 @@ function DashboardContent() {
     loadDeals();
   }
 
-  async function loadDeals() {
-    setLoading(true);
+  async function loadStages(forPipelineId: string) {
+    if (!forPipelineId) {
+      setStages([]);
+      return;
+    }
     const { data } = await supabaseBrowser
+      .from("pipeline_stages")
+      .select("*")
+      .eq("pipeline_id", forPipelineId)
+      .order("position", { ascending: true });
+    setStages(data || []);
+  }
+
+  async function loadDeals(forPipelineId?: string) {
+    setLoading(true);
+    const targetPipelineId = forPipelineId ?? pipelineId;
+    let query = supabaseBrowser
       .from("deals")
-      .select("id, title, value, stage, owner, lost_reason, created_at, contacts(id, first_name, last_name, phone, company_id, companies(project_id), calls(summary, call_date, outcome))")
+      .select("id, title, value, stage, pipeline_id, owner, lost_reason, created_at, contacts(id, first_name, last_name, phone, company_id, companies(project_id), calls(summary, call_date, outcome))")
       .order("updated_at", { ascending: false });
+    if (targetPipelineId) query = query.eq("pipeline_id", targetPipelineId);
+    const { data } = await query;
     setDeals((data as any) || []);
     setLoading(false);
   }
 
-  async function moveStage(dealId: string, stage: string) {
-    if (stage === "Lost") {
+  function switchPipeline(newPipelineId: string) {
+    setPipelineId(newPipelineId);
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    params.set("pipeline", newPipelineId);
+    router.replace(`/dashboard?${params.toString()}`);
+    loadStages(newPipelineId);
+    loadDeals(newPipelineId);
+  }
+
+  async function moveStage(dealId: string, stageName: string) {
+    const targetStage = stages.find((s) => s.name === stageName);
+    if (targetStage?.is_lost) {
       setLostReason("");
       setLostDealId(dealId);
+      setLostStageName(stageName);
       return;
     }
-    await supabaseBrowser.from("deals").update({ stage, lost_reason: null }).eq("id", dealId);
+    await supabaseBrowser.from("deals").update({ stage: stageName, lost_reason: null }).eq("id", dealId);
     loadDeals();
   }
 
   async function confirmLostReason(e: React.FormEvent) {
     e.preventDefault();
-    if (!lostDealId || !lostReason) return;
+    if (!lostDealId || !lostReason || !lostStageName) return;
     await supabaseBrowser
       .from("deals")
-      .update({ stage: "Lost", lost_reason: lostReason })
+      .update({ stage: lostStageName, lost_reason: lostReason })
       .eq("id", lostDealId);
     setLostDealId(null);
     setLostReason("");
+    setLostStageName("");
     loadDeals();
   }
 
@@ -250,11 +298,13 @@ function DashboardContent() {
     const created = new Date(d.created_at);
     return created.getFullYear() === now.getFullYear() && created.getMonth() === now.getMonth();
   }).length;
-  const stageCounts = STAGES.reduce((acc, s) => {
+  const stageNames = stages.map((s) => s.name);
+  const stageCounts = stageNames.reduce((acc, s) => {
     acc[s] = deals.filter((d) => d.stage === s).length;
     return acc;
   }, {} as Record<string, number>);
-  const conversionRate = deals.length ? Math.round((stageCounts["Won"] / deals.length) * 1000) / 10 : 0;
+  const wonCount = deals.filter((d) => stages.find((s) => s.name === d.stage)?.is_won).length;
+  const conversionRate = deals.length ? Math.round((wonCount / deals.length) * 1000) / 10 : 0;
 
   const filteredDeals = deals.filter((d) => {
     const matchesOwner = owner === "all" || d.owner === owner;
@@ -333,8 +383,20 @@ function DashboardContent() {
       <Sidebar />
       <div className="app-main">
       <div className="container">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2>Pipeline</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h2 style={{ margin: 0 }}>Pipeline</h2>
+            <select
+              value={pipelineId}
+              onChange={(e) => switchPipeline(e.target.value)}
+              style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text)" }}
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <a href="/settings/pipelines" style={{ fontSize: 12, color: "var(--text-secondary)" }}>Manage pipelines</a>
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               className="btn secondary"
@@ -348,19 +410,19 @@ function DashboardContent() {
         </div>
 
         <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          <div className="card" style={{ flex: "1 1 140px", margin: 0, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "uppercase" }}>This Month</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{monthTotal}</div>
+          <div className="card" style={{ flex: "1 1 140px", margin: 0, textAlign: "center", borderTop: "3px solid var(--primary)" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.02em" }}>This Month</div>
+            <div style={{ fontSize: 24, fontWeight: 750 }}>{monthTotal}</div>
           </div>
-          {STAGES.map((s) => (
-            <div className="card" key={s} style={{ flex: "1 1 110px", margin: 0, textAlign: "center" }}>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "uppercase" }}>{s}</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{stageCounts[s]}</div>
+          {stageNames.map((s) => (
+            <div className="card" key={s} style={{ flex: "1 1 110px", margin: 0, textAlign: "center", borderTop: `3px solid ${stageColor(s)}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.02em" }}>{s}</div>
+              <div style={{ fontSize: 24, fontWeight: 750 }}>{stageCounts[s]}</div>
             </div>
           ))}
-          <div className="card" style={{ flex: "1 1 140px", margin: 0, textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "uppercase" }}>Conversion Rate</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)" }}>{conversionRate}%</div>
+          <div className="card" style={{ flex: "1 1 140px", margin: 0, textAlign: "center", borderTop: "3px solid var(--primary)" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.02em" }}>Conversion Rate</div>
+            <div style={{ fontSize: 24, fontWeight: 750, color: "var(--primary)" }}>{conversionRate}%</div>
           </div>
         </div>
 
@@ -589,8 +651,9 @@ function DashboardContent() {
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
             <div className="board">
-              {STAGES.map((stage) => {
+              {stageNames.map((stage) => {
                 const stageDeals = filteredDeals.filter((d) => d.stage === stage);
+                const isLostStage = stages.find((s) => s.name === stage)?.is_lost;
                 return (
                   <Droppable droppableId={stage} key={stage}>
                     {(provided, snapshot) => (
@@ -598,9 +661,16 @@ function DashboardContent() {
                         className="column"
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        style={{ background: snapshot.isDraggingOver ? "var(--primary-tint)" : undefined }}
+                        style={{
+                          background: snapshot.isDraggingOver ? "var(--primary-tint)" : undefined,
+                          ["--stage-color" as any]: stageColor(stage),
+                        }}
                       >
-                        <h3>{stage} ({stageDeals.length})</h3>
+                        <h3>
+                          <span className="stage-dot" />
+                          {stage}
+                          <span className="count-badge">{stageDeals.length}</span>
+                        </h3>
                         {stageDeals.map((deal, index) => {
                           const call = latestCall(deal);
                           return (
@@ -613,7 +683,11 @@ function DashboardContent() {
                                   {...dragProvided.dragHandleProps}
                                   style={{
                                     ...dragProvided.draggableProps.style,
-                                    boxShadow: dragSnapshot.isDragging ? "0 4px 14px rgba(0,0,0,0.2)" : undefined,
+                                    boxShadow: dragSnapshot.isDragging ? "0 8px 20px rgba(0,0,0,0.25)" : undefined,
+                                    transform: dragSnapshot.isDragging
+                                      ? `${dragProvided.draggableProps.style?.transform || ""} rotate(-1deg)`
+                                      : dragProvided.draggableProps.style?.transform,
+                                    ["--stage-color" as any]: stageColor(stage),
                                   }}
                                 >
                                   <h4>{deal.title}</h4>
@@ -638,29 +712,29 @@ function DashboardContent() {
                                       </select>
                                     ) : (
                                       <span
-                                        style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                                        className="owner-pill"
                                         title="Click to change owner"
                                         onClick={() => setEditingOwnerDealId(deal.id)}
                                       >
-                                        Owner: {deal.owner || "Unassigned"}
+                                        {deal.owner || "Unassigned"}
                                       </span>
                                     )}
                                   </div>
 
-                                  {stage === "Lost" && deal.lost_reason && (
+                                  {isLostStage && deal.lost_reason && (
                                     <div className="meta" style={{ marginTop: 4 }}>
                                       Reason: {LOST_REASONS.find((r) => r.value === deal.lost_reason)?.label || deal.lost_reason}
                                     </div>
                                   )}
 
-                                  {stage === "Contacted" && call && (
+                                  {call && (
                                     <div className="call-summary">
                                       <span className="label">AI Call Summary</span>
                                       {call.summary}
                                       {call.outcome && <div style={{ marginTop: 4, color: "#555" }}>Outcome: {call.outcome}</div>}
                                     </div>
                                   )}
-                                  {stage === "Contacted" && !call && (
+                                  {!call && (
                                     <div className="call-summary" style={{ borderLeftColor: "#aaa", color: "#888" }}>
                                       No AI call logged yet.
                                     </div>
@@ -680,7 +754,7 @@ function DashboardContent() {
                                       onChange={(e) => moveStage(deal.id, e.target.value)}
                                       style={{ fontSize: 12 }}
                                     >
-                                      {STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
+                                      {stageNames.map((s) => <option key={s} value={s}>{s}</option>)}
                                     </select>
                                   </div>
                                 </div>

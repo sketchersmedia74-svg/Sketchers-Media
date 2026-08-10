@@ -8,6 +8,7 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [calls, setCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [noteText, setNoteText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -33,6 +34,7 @@ export default function ContactDetailPage() {
       setContact(contactData);
       await loadNotes();
       await loadTasks();
+      await loadCalls();
       setLoading(false);
     })();
   }, [contactId]);
@@ -74,6 +76,15 @@ export default function ContactDetailPage() {
       .eq("contact_id", contactId)
       .order("due_date", { ascending: true });
     setTasks(data || []);
+  }
+
+  async function loadCalls() {
+    const { data } = await supabaseBrowser
+      .from("calls")
+      .select("*")
+      .eq("contact_id", contactId)
+      .order("call_date", { ascending: false });
+    setCalls(data || []);
   }
 
   async function addTask(e: React.FormEvent) {
@@ -235,6 +246,30 @@ export default function ContactDetailPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        <h3>Call History</h3>
+        {calls.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>No AI calls logged yet.</p>
+        ) : (
+          <div style={{ marginBottom: 24 }}>
+            {calls.map((c) => (
+              <div className="card" key={c.id}>
+                <div style={{ whiteSpace: "pre-wrap" }}>{c.summary || "No summary."}</div>
+                <div className="meta" style={{ marginTop: 6, marginBottom: 0 }}>
+                  {new Date(c.call_date).toLocaleString()}
+                  {c.outcome && ` · Outcome: ${c.outcome}`}
+                  {c.duration_seconds != null && ` · ${Math.round(c.duration_seconds / 60)} min`}
+                  {c.recording_url && (
+                    <>
+                      {" · "}
+                      <a href={c.recording_url} target="_blank" rel="noreferrer">Recording</a>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

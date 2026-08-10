@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/deals -> create a deal
-// Body: { title, contact_id, company_id?, value?, stage?, owner? }
+// Body: { title, contact_id, company_id?, value?, pipeline_id?, stage?, owner? }
+// pipeline_id defaults to the "Default Pipeline" (via DB trigger) if omitted.
 export async function POST(req: NextRequest) {
   const authError = checkApiKey(req);
   if (authError) return authError;

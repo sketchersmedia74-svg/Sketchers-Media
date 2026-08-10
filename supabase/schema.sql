@@ -99,6 +99,64 @@ alter table contacts add column if not exists next_retry_at timestamptz;
 
 create index if not exists idx_contacts_next_retry_at on contacts(next_retry_at);
 
+-- Pipelines: like GoHighLevel, you can have more than one pipeline (e.g.
+-- "Sales Pipeline", "Onboarding"), each with its own ordered set of custom
+-- stages instead of one fixed New/Contacted/Proposal/Won/Lost flow.
+create table if not exists pipelines (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+-- Stages belonging to a pipeline, in display order (position). is_won/is_lost
+-- flag which stage(s) represent a closed-won or closed-lost outcome, so
+-- reporting (conversion rate, "Won" counts) and the lost-reason prompt work
+-- correctly no matter what a given pipeline's stages are actually named.
+create table if not exists pipeline_stages (
+  id uuid primary key default uuid_generate_v4(),
+  pipeline_id uuid not null references pipelines(id) on delete cascade,
+  name text not null,
+  position int not null default 0,
+  is_won boolean not null default false,
+  is_lost boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_pipeline_stages_pipeline on pipeline_stages(pipeline_id);
+
+alter table pipelines enable row level security;
+create policy "Authenticated team can read pipelines" on pipelines
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write pipelines" on pipelines
+  for all using (auth.role() = 'authenticated');
+
+alter table pipeline_stages enable row level security;
+create policy "Authenticated team can read pipeline_stages" on pipeline_stages
+  for select using (auth.role() = 'authenticated');
+create policy "Authenticated team can write pipeline_stages" on pipeline_stages
+  for all using (auth.role() = 'authenticated');
+
+-- Seeds a "Default Pipeline" matching the CRM's original fixed stages, and
+-- backfills every existing deal onto it — run this once when applying the
+-- migration to an existing database (safe to re-run: no-ops if it already exists).
+insert into pipelines (name)
+select 'Default Pipeline'
+where not exists (select 1 from pipelines where name = 'Default Pipeline');
+
+insert into pipeline_stages (pipeline_id, name, position, is_won, is_lost)
+select p.id, s.name, s.position, s.is_won, s.is_lost
+from pipelines p
+cross join (values
+  ('New', 0, false, false),
+  ('Contacted', 1, false, false),
+  ('Proposal', 2, false, false),
+  ('Won', 3, true, false),
+  ('Lost', 4, false, true)
+) as s(name, position, is_won, is_lost)
+where p.name = 'Default Pipeline'
+  and not exists (
+    select 1 from pipeline_stages ps where ps.pipeline_id = p.id and ps.name = s.name
+  );
+
 -- Deals (pipeline)
 create table if not exists deals (
   id uuid primary key default uuid_generate_v4(),
@@ -106,14 +164,42 @@ create table if not exists deals (
   contact_id uuid references contacts(id) on delete cascade,
   company_id uuid references companies(id) on delete set null,
   value numeric default 0,
-  stage text not null default 'New'
-    check (stage in ('New','Contacted','Proposal','Won','Lost')),
+  pipeline_id uuid references pipelines(id) on delete set null,
+  stage text not null default 'New',
   lost_reason text
     check (lost_reason in ('not_interested','no_budget','bad_timing','competitor','other')),
   owner text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- Migrating from the old fixed-stage schema: drop the CHECK that limited
+-- stage to the 5 hardcoded values (stages are now dynamic per pipeline), add
+-- pipeline_id, and backfill existing deals onto the seeded Default Pipeline.
+alter table deals drop constraint if exists deals_stage_check;
+alter table deals add column if not exists pipeline_id uuid references pipelines(id) on delete set null;
+update deals set pipeline_id = (select id from pipelines where name = 'Default Pipeline')
+where pipeline_id is null;
+create index if not exists idx_deals_pipeline on deals(pipeline_id);
+
+-- Several insert paths create a deal without specifying pipeline_id
+-- (lib/booking.ts, POST /api/deals from Make.com scenarios, etc.) — rather
+-- than patching every call site, default any such deal onto the Default
+-- Pipeline automatically so it isn't silently invisible on the (now
+-- pipeline-scoped) Pipeline board.
+create or replace function set_default_deal_pipeline()
+returns trigger as $$
+begin
+  if new.pipeline_id is null then
+    select id into new.pipeline_id from pipelines where name = 'Default Pipeline' limit 1;
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_deals_default_pipeline on deals;
+create trigger trg_deals_default_pipeline
+before insert on deals
+for each row execute procedure set_default_deal_pipeline();
 
 -- Notes / activity timeline on a contact
 create table if not exists notes (
