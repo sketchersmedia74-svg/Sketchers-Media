@@ -11,8 +11,8 @@ import { supabaseAdmin } from "@/lib/supabase";
  */
 export async function POST(req: NextRequest) {
   const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { contact_id } = await req.json();
   if (!contact_id) return NextResponse.json({ error: "contact_id is required" }, { status: 400 });

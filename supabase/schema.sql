@@ -123,17 +123,26 @@ create table if not exists pipeline_stages (
 );
 create index if not exists idx_pipeline_stages_pipeline on pipeline_stages(pipeline_id);
 
+-- Reads are open to any signed-in team member (the Pipeline board itself
+-- needs to render stage names/colors for everyone), but writes are
+-- restricted to admins only — matching /settings/pipelines being listed
+-- only in the admin nav section. Without this, a non-admin's session could
+-- call Supabase directly (bypassing the UI) to rename/delete pipelines.
 alter table pipelines enable row level security;
+drop policy if exists "Authenticated team can write pipelines" on pipelines;
 create policy "Authenticated team can read pipelines" on pipelines
   for select using (auth.role() = 'authenticated');
-create policy "Authenticated team can write pipelines" on pipelines
-  for all using (auth.role() = 'authenticated');
+drop policy if exists "Admins can write pipelines" on pipelines;
+create policy "Admins can write pipelines" on pipelines
+  for all using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
 
 alter table pipeline_stages enable row level security;
+drop policy if exists "Authenticated team can write pipeline_stages" on pipeline_stages;
 create policy "Authenticated team can read pipeline_stages" on pipeline_stages
   for select using (auth.role() = 'authenticated');
-create policy "Authenticated team can write pipeline_stages" on pipeline_stages
-  for all using (auth.role() = 'authenticated');
+drop policy if exists "Admins can write pipeline_stages" on pipeline_stages;
+create policy "Admins can write pipeline_stages" on pipeline_stages
+  for all using (exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin'));
 
 -- Seeds a "Default Pipeline" matching the CRM's original fixed stages, and
 -- backfills every existing deal onto it — run this once when applying the

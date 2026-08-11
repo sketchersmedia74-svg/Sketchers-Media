@@ -5,6 +5,12 @@ import { supabaseAdmin } from "@/lib/supabase";
 // Same session+role check used by /api/team-members — cookie-based Supabase
 // session (refreshed on every request by middleware.ts), then a profiles.role
 // lookup via the service-role client. Use for any admin-only route handler.
+//
+// Uses getUser(), not getSession(): getSession() decodes the session cookie
+// locally without re-checking it against the Supabase Auth server, which
+// Supabase's own docs flag as unsafe to trust for authorization decisions
+// server-side (a stale/forged cookie value wouldn't be caught). getUser()
+// sends the access token to Supabase to verify it's genuinely still valid.
 export type AdminSessionResult =
   | { ok: true; userId: string }
   | { ok: false; reason: "no_session" | "no_profile" | "profile_lookup_failed" | "not_admin" };
@@ -12,12 +18,12 @@ export type AdminSessionResult =
 export async function checkAdminSession(): Promise<AdminSessionResult> {
   const supabase = createRouteHandlerClient({ cookies });
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return { ok: false, reason: "no_session" };
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, reason: "no_session" };
 
   const db = supabaseAdmin();
-  const { data, error } = await db.from("profiles").select("role").eq("id", session.user.id).single();
+  const { data, error } = await db.from("profiles").select("role").eq("id", user.id).single();
 
   if (error) {
     // Distinguish "row genuinely doesn't exist" from "the lookup itself
@@ -30,7 +36,7 @@ export async function checkAdminSession(): Promise<AdminSessionResult> {
   }
   if (data?.role !== "admin") return { ok: false, reason: "not_admin" };
 
-  return { ok: true, userId: session.user.id };
+  return { ok: true, userId: user.id };
 }
 
 // Back-compat convenience wrapper for call sites that only need a yes/no.

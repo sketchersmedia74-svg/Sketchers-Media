@@ -10,10 +10,13 @@ import { supabaseAdmin } from "@/lib/supabase";
  * /api/internal/trigger-call — not the x-api-key used by Make.com.
  */
 
-async function requireSession() {
+// getUser(), not getSession() — re-verifies the token against Supabase's
+// Auth server rather than trusting the cookie-decoded value as-is (see
+// lib/adminAuth.ts for the full rationale).
+async function requireUser() {
   const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  return session;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
 
 async function requireAdmin(userId: string) {
@@ -28,9 +31,9 @@ function generateTempPassword() {
 
 // GET /api/team-members -> list Supabase Auth users (id, email only). Admins only.
 export async function GET() {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  if (!(await requireAdmin(session.user.id))) {
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!(await requireAdmin(user.id))) {
     return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
   }
 
@@ -66,9 +69,9 @@ export async function GET() {
 // creates the user directly and returns a one-time temporary password.
 // Always creates a matching profiles row (role defaults to 'member').
 export async function POST(req: NextRequest) {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  if (!(await requireAdmin(session.user.id))) {
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  if (!(await requireAdmin(user.id))) {
     return NextResponse.json({ error: "Forbidden: admin access required" }, { status: 403 });
   }
 

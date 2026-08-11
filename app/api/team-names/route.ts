@@ -10,16 +10,18 @@ import { supabaseAdmin } from "@/lib/supabase";
  * actual Supabase Auth login accounts.
  */
 
-async function requireSession() {
+// getUser(), not getSession() — re-verifies the token against Supabase's
+// Auth server rather than trusting the cookie-decoded value as-is.
+async function requireUser() {
   const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
-  return session;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
 }
 
 // GET /api/team-names -> list all names. Any signed-in team member.
 export async function GET() {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const db = supabaseAdmin();
   const { data, error } = await db.from("team_names").select("*").order("name");
@@ -29,8 +31,8 @@ export async function GET() {
 
 // POST /api/team-names -> add a name. Body: { name }. Any signed-in team member.
 export async function POST(req: NextRequest) {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { name } = await req.json();
   if (!name || !name.trim()) return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -43,8 +45,8 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/team-names?id=... -> remove a name. Any signed-in team member.
 export async function DELETE(req: NextRequest) {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
