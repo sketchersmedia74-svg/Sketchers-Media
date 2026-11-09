@@ -4,6 +4,9 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 import type { ActiveCall, IncomingCall, PendingOutcome } from "./PhoneProvider";
 import { STATE_TZ } from "@/lib/phone/usTime";
 
+const PREVIEW_LABEL = "PREVIEW – not a real call";
+const PreviewBadge = () => <div className="preview-badge">{PREVIEW_LABEL}</div>;
+
 const pad = (n: number) => String(n).padStart(2, "0");
 const mmss = (s: number) => `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
 
@@ -32,6 +35,7 @@ export function CallBar({
 
   return (
     <div className="call-bar" role="region" aria-label="Active call">
+      {active.preview && <PreviewBadge />}
       {keypad && (
         <div className="call-keypad">
           {["1","2","3","4","5","6","7","8","9","*","0","#"].map((d) => (
@@ -68,6 +72,7 @@ export function IncomingCallBar({
 }) {
   return (
     <div className="call-bar incoming" role="alertdialog" aria-label="Incoming call">
+      {incoming.preview && <PreviewBadge />}
       <div className="call-bar-row">
         <div className="call-bar-info">
           <strong>Incoming call</strong>
@@ -131,6 +136,7 @@ export function OutcomePanel({ pending, onDone }: { pending: PendingOutcome; onD
     if (!newFirst.trim()) { setError("First name is required."); return; }
     const st = newState.trim().toUpperCase();
     if (st && !STATE_TZ[st]) { setError("State must be a 2-letter US state code, like TX."); return; }
+    if (pending.preview) { setLinkedContactId("preview-contact"); setShowNew(false); return; } // no DB writes in preview
     setCreating(true);
 
     const logId = await resolveLogId();
@@ -172,6 +178,7 @@ export function OutcomePanel({ pending, onDone }: { pending: PendingOutcome; onD
     setError("");
     if (!outcome) { setError("Pick an outcome first."); return; }
     if (outcome === "call_back" && !callbackAt) { setError("Pick the call-back date and time."); return; }
+    if (pending.preview) { onDone(); return; } // preview: nothing is saved anywhere
     setSaving(true);
 
     const logId = await resolveLogId();
@@ -204,6 +211,7 @@ export function OutcomePanel({ pending, onDone }: { pending: PendingOutcome; onD
   return (
     <div className="modal-overlay" style={{ zIndex: 1200 }}>
       <div className="call-outcome">
+        {pending.preview && <PreviewBadge />}
         <h3 style={{ marginTop: 0 }}>How did the call go?</h3>
         <div style={{ color: "var(--text-muted)", marginBottom: 12 }}>
           {pending.name} · {pending.number} · {pending.answered ? "Connected" : "Not answered"}
@@ -244,7 +252,7 @@ export function OutcomePanel({ pending, onDone }: { pending: PendingOutcome; onD
         )}
         {contactId && linkedContactId && (
           <p style={{ color: "#1a8f4c", fontSize: 13, marginBottom: 0 }}>
-            Saved as a new contact and linked to this call. <a href={`/contacts/${linkedContactId}`} target="_blank" rel="noreferrer">Open</a>
+            {pending.preview ? "Preview: no contact was really created." : (<>Saved as a new contact and linked to this call. <a href={`/contacts/${linkedContactId}`} target="_blank" rel="noreferrer">Open</a></>)}
           </p>
         )}
         {showNew && !contactId && (
@@ -268,6 +276,28 @@ export function OutcomePanel({ pending, onDone }: { pending: PendingOutcome; onD
         <button className="btn" style={{ width: "100%", marginTop: 12 }} onClick={save} disabled={saving}>
           {saving ? "Saving…" : "Save outcome"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+export function PreviewControls({
+  onOutgoing, onIncoming, onOutcome,
+}: {
+  onOutgoing: () => void;
+  onIncoming: () => void;
+  onOutcome: () => void;
+}) {
+  return (
+    <div className="preview-controls" role="region" aria-label="Calling preview controls">
+      <div className="preview-badge" style={{ marginBottom: 8 }}>{PREVIEW_LABEL}</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+        Local preview only. No Telnyx, nothing saved.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button className="btn secondary" onClick={onOutgoing}>Fake outgoing call</button>
+        <button className="btn secondary" onClick={onIncoming}>Fake incoming call</button>
+        <button className="btn secondary" onClick={onOutcome}>Show outcome panel</button>
       </div>
     </div>
   );

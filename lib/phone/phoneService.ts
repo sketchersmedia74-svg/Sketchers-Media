@@ -3,7 +3,12 @@ import { supabaseBrowser } from "@/lib/supabaseClient";
 
 // Calling is OFF until NEXT_PUBLIC_CALLING_ENABLED=true is set at build time
 // (so the app ships safely before the Telnyx account and Edge Functions exist).
-export const CALLING_ENABLED = process.env.NEXT_PUBLIC_CALLING_ENABLED === "true";
+// Local-only UI preview: fake calls, no Telnyx connection, no database writes. NODE_ENV is
+// replaced at build time, so in any production build this is constant-false and ignored,
+// even if NEXT_PUBLIC_CALLING_PREVIEW were set.
+export const CALLING_PREVIEW =
+  process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_CALLING_PREVIEW === "true";
+export const CALLING_ENABLED = CALLING_PREVIEW || process.env.NEXT_PUBLIC_CALLING_ENABLED === "true";
 
 export const REMOTE_AUDIO_ID = "crm-remote-audio";
 export type PhoneStatus = "disabled" | "idle" | "connecting" | "ready" | "error";
@@ -33,7 +38,7 @@ class PhoneService {
   }
 
   async connect() {
-    if (!CALLING_ENABLED || this.connecting || this.client) return;
+    if (!CALLING_ENABLED || CALLING_PREVIEW || this.connecting || this.client) return;
     this.connecting = true;
     this.stopped = false;
     this.handlers?.onStatus("connecting");
@@ -132,6 +137,7 @@ class PhoneService {
   }
 
   newCall(opts: { to: string; logId: string }) {
+    if (CALLING_PREVIEW) throw new Error("Preview mode never places real calls.");
     if (!this.client) throw new Error("Phone is not connected yet. Wait a moment and try again.");
     return this.client.newCall({
       destinationNumber: opts.to,

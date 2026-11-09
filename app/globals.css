@@ -606,3 +606,15 @@ input:focus, select:focus, textarea:focus {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
   padding: 12px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--primary-tint);
 }
+
+/* ---- Calling preview mode (local development only) ---- */
+.preview-badge {
+  display: inline-block; background: #f5c542; color: #1a1a1a; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px; margin-bottom: 6px;
+}
+.preview-controls {
+  position: fixed; top: 12px; right: 12px; z-index: 1300; width: 190px;
+  background: var(--card-bg); color: var(--text); border: 2px solid #f5c542; border-radius: 10px;
+  padding: 10px; box-shadow: 0 6px 20px var(--shadow);
+}

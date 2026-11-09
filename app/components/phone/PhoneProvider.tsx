@@ -1,9 +1,9 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabaseClient";
-import { CALLING_ENABLED, phoneService, REMOTE_AUDIO_ID, PhoneStatus } from "@/lib/phone/phoneService";
+import { CALLING_ENABLED, CALLING_PREVIEW, phoneService, REMOTE_AUDIO_ID, PhoneStatus } from "@/lib/phone/phoneService";
 import { isWithinCallingHours, localTimeLabel, parseDialable, resolveTimezone, toE164 } from "@/lib/phone/usTime";
-import { CallBar, IncomingCallBar, OutcomePanel } from "./PhoneUI";
+import { CallBar, IncomingCallBar, OutcomePanel, PreviewControls } from "./PhoneUI";
 
 export type CallableContact = {
   id: string;
@@ -25,6 +25,7 @@ export type ActiveCall = {
   phase: "dialing" | "ringing" | "connected";
   connectedAt: number | null;
   muted: boolean;
+  preview?: boolean;
 };
 
 export type PendingOutcome = {
@@ -35,9 +36,10 @@ export type PendingOutcome = {
   name: string;
   number: string;
   answered: boolean;
+  preview?: boolean;
 };
 
-export type IncomingCall = { call: any; number: string; contactId: string | null; name: string };
+export type IncomingCall = { call: any; number: string; contactId: string | null; name: string; preview?: boolean };
 
 type PhoneContext = {
   enabled: boolean;
@@ -61,7 +63,7 @@ const fullName = (c: { first_name: string; last_name?: string | null }) =>
 const last10 = (s?: string | null) => (s || "").replace(/\D/g, "").slice(-10);
 
 export default function PhoneProvider({ children }: { children: React.ReactNode }) {
-  const [status, setStatus] = useState<PhoneStatus>(CALLING_ENABLED ? "idle" : "disabled");
+  const [status, setStatus] = useState<PhoneStatus>(CALLING_PREVIEW ? "ready" : CALLING_ENABLED ? "idle" : "disabled");
   const [statusMessage, setStatusMessage] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [active, setActive] = useState<ActiveCall | null>(null);
@@ -94,7 +96,7 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
     const sessionId = a.call?.telnyxIDs?.telnyxSessionId ?? null;
     const p: PendingOutcome = {
       logId: a.logId, sessionId, direction: a.direction, contactId: a.contactId,
-      name: a.name, number: a.number, answered,
+      name: a.name, number: a.number, answered, preview: a.preview,
     };
     pendingRef.current = p;
     setPending(p);
@@ -124,9 +126,9 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
     // A new inbound call: only ring if this caller is free.
     if (call.direction === "inbound" && state === "ringing" && !a && !pendingRef.current && !inc) {
       const number: string = call.remotePartyNumber || "";
-      setIncoming({ call, number, contactId: null, name: "Unknown caller" });
+      setIncoming({ call, number, contactId: null, name: call.preview ? "Dr. Sample (preview)" : "Unknown caller", preview: !!call.preview });
       const tail = last10(number);
-      if (tail) {
+      if (tail && !call.preview) {
         supabaseBrowser
           .from("contacts")
           .select("id, first_name, last_name")
@@ -153,7 +155,7 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
       if (session?.user) {
         const { data } = await supabaseBrowser.from("profiles").select("role").eq("id", session.user.id).single();
         setIsAdmin(data?.role === "admin");
-        phoneService.connect();
+        if (!CALLING_PREVIEW) phoneService.connect();
       } else {
         setIsAdmin(false);
         phoneService.disconnect();
@@ -177,6 +179,50 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
       readyWaiters.current.push(() => { clearTimeout(t); resolve(true); });
     });
   }
+
+  // ---- Preview mode helpers (local development only; nothing here touches Telnyx or the DB) ----
+  const makeFakeCall = useCallback((direction: "outbound" | "inbound", number: string) => {
+    const fake: any = {
+      id: `preview-${Date.now()}`, preview: true, direction, state: "new", remotePartyNumber: number,
+      telnyxIDs: { telnyxSessionId: null },
+      answer: async () => {},
+      hangup: () => { fake.state = "hangup"; onCall(fake); },
+      muteAudio: () => {}, unmuteAudio: () => {}, dtmf: () => {},
+    };
+    return fake;
+  }, [onCall]);
+
+  const simulateOutgoing = useCallback((name: string, number: string) => {
+    const fake = makeFakeCall("outbound", number);
+    const a: ActiveCall = {
+      call: fake, logId: null, direction: "outbound", contactId: null,
+      name, number, phase: "dialing", connectedAt: null, muted: false, preview: true,
+    };
+    activeRef.current = a;
+    setActive(a);
+    setTimeout(() => { if (fake.state !== "hangup") { fake.state = "ringing"; onCall(fake); } }, 1500);
+    setTimeout(() => { if (fake.state === "ringing") { fake.state = "active"; onCall(fake); } }, 3500);
+  }, [makeFakeCall, onCall]);
+
+  const previewOutgoing = () => {
+    if (activeRef.current || pendingRef.current || incomingRef.current) return;
+    simulateOutgoing("Dr. Sample (preview)", "+12145550123");
+  };
+  const previewIncoming = () => {
+    if (activeRef.current || pendingRef.current || incomingRef.current) return;
+    const fake = makeFakeCall("inbound", "+12145550123");
+    fake.state = "ringing";
+    onCall(fake);
+  };
+  const previewOutcome = () => {
+    if (activeRef.current || pendingRef.current || incomingRef.current) return;
+    const p: PendingOutcome = {
+      logId: null, sessionId: null, direction: "outbound", contactId: null,
+      name: "Dr. Sample (preview)", number: "+12145550123", answered: true, preview: true,
+    };
+    pendingRef.current = p;
+    setPending(p);
+  };
 
   // ---- Start an outbound call --------------------------------------------------
   const startCall = useCallback(async (c: CallableContact) => {
@@ -205,7 +251,7 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
     const tz = resolveTimezone({
       timezone: fresh?.timezone ?? c.timezone, state: fresh?.state ?? c.state, phone: c.phone,
     });
-    if (tz && tz.source !== "saved" && !isManual) {
+    if (tz && tz.source !== "saved" && !isManual && !CALLING_PREVIEW) {
       // Remember the derived zone so later checks are instant.
       await supabaseBrowser.from("contacts").update({ timezone: tz.timezone }).eq("id", c.id);
     }
@@ -225,6 +271,12 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
         return { ok: false, error: "Call cancelled." };
       }
       override = true;
+    }
+
+    // Preview: simulate the call. No microphone, no Telnyx, no database writes.
+    if (CALLING_PREVIEW) {
+      simulateOutgoing(isManual ? to : fullName(c), to);
+      return { ok: true };
     }
 
     // 4. Microphone, then phone connection.
@@ -273,7 +325,7 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
       await supabaseBrowser.from("call_logs").update({ status: "failed" }).eq("id", row.id);
       return { ok: false, error: e?.message || "Could not start the call." };
     }
-  }, [isAdmin, statusMessage]);
+  }, [isAdmin, statusMessage, simulateOutgoing]);
 
   // ---- Manual dial: any US/Canada number, matched to a contact when one exists ----
   const startManualCall = useCallback(async (raw: string) => {
@@ -304,11 +356,12 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
     const inc = incomingRef.current;
     if (!inc) return;
     try {
-      await phoneService.ensureMicrophone();
+      if (!inc.preview) await phoneService.ensureMicrophone();
       await inc.call.answer();
       const a: ActiveCall = {
         call: inc.call, logId: null, direction: "inbound", contactId: inc.contactId,
         name: inc.name, number: inc.number, phase: "connected", connectedAt: Date.now(), muted: false,
+        preview: inc.preview,
       };
       activeRef.current = a;
       setActive(a);
@@ -336,6 +389,9 @@ export default function PhoneProvider({ children }: { children: React.ReactNode 
           <audio id={REMOTE_AUDIO_ID} autoPlay playsInline />
           {incoming && <IncomingCallBar incoming={incoming} onAnswer={answerIncoming} onDecline={declineIncoming} />}
           {active && <CallBar active={active} onHangup={hangup} onMute={toggleMute} onDigit={sendDigit} />}
+          {CALLING_PREVIEW && (
+            <PreviewControls onOutgoing={previewOutgoing} onIncoming={previewIncoming} onOutcome={previewOutcome} />
+          )}
           {pending && (
             <OutcomePanel
               pending={pending}
