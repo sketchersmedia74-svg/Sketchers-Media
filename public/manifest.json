@@ -1,6 +1,6 @@
 {
-  "name": "Sketchers Media CRM",
-  "short_name": "Sketchers CRM",
+  "name": "Reset Dental Media CRM",
+  "short_name": "Reset Dental CRM",
   "description": "Internal CRM dashboard",
   "start_url": "/dashboard",
   "display": "standalone",

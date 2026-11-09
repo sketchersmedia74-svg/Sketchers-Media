@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import { downloadCsv, parseCsv } from "@/lib/csv";
 import Sidebar from "../components/Sidebar";
+import CallButton from "../components/phone/CallButton";
+import NextLeadPanel from "../components/phone/NextLeadPanel";
 
 const IMPORT_FIELDS = [
   { key: "first_name", label: "First name" },
@@ -308,6 +310,7 @@ export default function ContactsPage() {
             <button className="btn" onClick={() => setShowForm(true)}>New Contact</button>
           </div>
         </div>
+        <NextLeadPanel />
         <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
           <input
             placeholder="Search by name, email, phone, or company…"
@@ -515,7 +518,7 @@ export default function ContactsPage() {
           <table>
             <thead>
               <tr>
-                <th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Attempts</th><th>Last AI Call Summary</th>
+                <th>Name</th><th>Company</th><th>Phone</th><th>Email</th><th>Attempts</th><th>Last AI Call Summary</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -535,6 +538,7 @@ export default function ContactsPage() {
                       {c.max_attempts_reached && <span title="Max attempts reached" style={{ color: "#d33" }}> ⚠</span>}
                     </td>
                     <td>{last ? last.summary : <span style={{ color: "#999" }}>No calls yet</span>}</td>
+                    <td><CallButton contact={c} small /></td>
                   </tr>
                 );
               })}

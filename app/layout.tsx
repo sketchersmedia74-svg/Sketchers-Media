@@ -1,14 +1,15 @@
 import "./globals.css";
 import RegisterServiceWorker from "./components/RegisterServiceWorker";
+import PhoneProvider from "./components/phone/PhoneProvider";
 
 export const metadata = {
-  title: "Sketchers Media CRM",
+  title: "Reset Dental Media CRM",
   description: "Internal CRM dashboard",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Sketchers CRM",
+    title: "Reset Dental CRM",
   },
 };
 
@@ -29,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <RegisterServiceWorker />
-        {children}
+        <PhoneProvider>{children}</PhoneProvider>
       </body>
     </html>
   );

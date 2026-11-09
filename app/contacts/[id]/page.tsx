@@ -3,8 +3,18 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
 import Sidebar from "../../components/Sidebar";
+import CallButton from "../../components/phone/CallButton";
+import { STATE_TZ } from "@/lib/phone/usTime";
+
+const OUTCOME_LABELS: Record<string, string> = {
+  no_answer: "No answer", voicemail: "Left voicemail", interested: "Interested",
+  call_back: "Call back later", not_interested: "Not interested",
+  wrong_number: "Wrong number", do_not_call: "Do not call",
+};
 
 export default function ContactDetailPage() {
+  const [phoneCalls, setPhoneCalls] = useState<any[]>([]);
+  const [callers, setCallers] = useState<Record<string, string>>({});
   const [contact, setContact] = useState<any>(null);
   const [notes, setNotes] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -35,9 +45,34 @@ export default function ContactDetailPage() {
       await loadNotes();
       await loadTasks();
       await loadCalls();
+      await loadPhoneCalls();
       setLoading(false);
     })();
   }, [contactId]);
+
+  async function loadPhoneCalls() {
+    const { data } = await supabaseBrowser
+      .from("call_logs")
+      .select("*")
+      .eq("contact_id", contactId)
+      .order("started_at", { ascending: false });
+    setPhoneCalls(data || []);
+    if (data?.length) {
+      const { data: people } = await supabaseBrowser.from("profiles").select("id, full_name, email");
+      const map: Record<string, string> = {};
+      (people || []).forEach((p: any) => { map[p.id] = p.full_name || p.email; });
+      setCallers(map);
+    }
+  }
+
+  async function saveState(value: string) {
+    const st = value.trim().toUpperCase();
+    if (st && !STATE_TZ[st]) return; // ignore anything that isn't a US state code
+    // A saved state replaces a previously derived time zone, so clear it to re-derive.
+    const patch = { state: st || null, timezone: st ? STATE_TZ[st] : null };
+    await supabaseBrowser.from("contacts").update(patch).eq("id", contactId);
+    setContact((prev: any) => (prev ? { ...prev, ...patch } : prev));
+  }
 
   async function deleteContact() {
     const confirmed = window.confirm(
@@ -162,9 +197,12 @@ export default function ContactDetailPage() {
       <div className="container">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <a href="/contacts" style={{ fontSize: 13, color: "var(--text-secondary)" }}>&larr; Back to Contacts</a>
-          <button className="btn secondary" onClick={deleteContact} disabled={deleting} style={{ color: "#d33" }}>
-            {deleting ? "Deleting…" : "Delete Contact"}
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <CallButton contact={contact} />
+            <button className="btn secondary" onClick={deleteContact} disabled={deleting} style={{ color: "#d33" }}>
+              {deleting ? "Deleting…" : "Delete Contact"}
+            </button>
+          </div>
         </div>
         {deleteError && <p className="error">{deleteError}</p>}
         <h2 style={{ marginBottom: 4 }}>{contact.first_name} {contact.last_name}</h2>
@@ -177,13 +215,27 @@ export default function ContactDetailPage() {
             <span style={{ color: "#d33" }}> · Max attempts reached (no answer x3)</span>
           )}
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, fontWeight: 600 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontWeight: 600 }}>
           <input
             type="checkbox"
             checked={!!contact.do_not_call}
             onChange={(e) => toggleDoNotCall(e.target.checked)}
           />
           Do not call
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, fontWeight: 600 }}>
+          US state
+          <input
+            key={contact.state || "none"}
+            defaultValue={contact.state || ""}
+            maxLength={2}
+            placeholder="TX"
+            onBlur={(e) => saveState(e.target.value)}
+            style={{ width: 56, padding: 6, borderRadius: 6, border: "1px solid var(--input-border)", background: "var(--input-bg)", color: "var(--text)", textTransform: "uppercase" }}
+          />
+          <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 13 }}>
+            {contact.timezone ? `Time zone: ${contact.timezone}` : "Used to check calling hours (8am–9pm their time)."}
+          </span>
         </label>
 
         <h3>Tasks & Reminders</h3>
@@ -249,7 +301,30 @@ export default function ContactDetailPage() {
           </div>
         )}
 
-        <h3>Call History</h3>
+        <h3>Phone Calls</h3>
+        {phoneCalls.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>No phone calls yet.</p>
+        ) : (
+          <div style={{ marginBottom: 24 }}>
+            {phoneCalls.map((c) => (
+              <div className="card" key={c.id}>
+                <div>
+                  <strong>{c.direction === "inbound" ? "Inbound" : "Outbound"}</strong>
+                  {" · "}{c.outcome ? OUTCOME_LABELS[c.outcome] || c.outcome : (c.status === "ended" ? "No outcome saved" : c.status)}
+                  {c.outside_hours_override && <span style={{ color: "#d33" }}> · admin override</span>}
+                </div>
+                {c.notes && <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.notes}</div>}
+                <div className="meta" style={{ marginTop: 6, marginBottom: 0 }}>
+                  {new Date(c.started_at).toLocaleString()}
+                  {" · "}{c.user_id ? callers[c.user_id] || "Team member" : "Unassigned"}
+                  {c.duration_seconds != null && ` · ${Math.floor(c.duration_seconds / 60)}m ${c.duration_seconds % 60}s`}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3>AI Call History</h3>
         {calls.length === 0 ? (
           <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>No AI calls logged yet.</p>
         ) : (

@@ -496,7 +496,7 @@ function OverviewContent() {
                   {displayName}
                 </div>
               )}
-              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Sketchers Media</div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Reset Dental Media</div>
             </div>
           </div>
         </div>

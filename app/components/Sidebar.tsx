@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseClient";
+import { CALLING_ENABLED } from "@/lib/phone/phoneService";
 
 function Icon({ path }: { path: string }) {
   return (
@@ -23,6 +24,7 @@ const ICONS = {
   projects: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z",
   signOut: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3",
   menu: "M4 6h16M4 12h16M4 18h16",
+  dialer: "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z",
 };
 
 const BASE_NAV = [
@@ -32,6 +34,8 @@ const BASE_NAV = [
   { href: "/companies", label: "Companies", icon: ICONS.companies },
   { href: "/projects", label: "Projects", icon: ICONS.projects },
   { href: "/bookings", label: "Bookings", icon: ICONS.bookings },
+  // Only shown once browser calling is switched on.
+  ...(CALLING_ENABLED ? [{ href: "/dialer", label: "Dialer", icon: ICONS.dialer }] : []),
 ];
 
 export default function Sidebar() {
@@ -103,7 +107,7 @@ export default function Sidebar() {
   return (
     <div className={expanded ? "sidebar expanded" : "sidebar"}>
       <div className="sidebar-top">
-        <a href="/overview" className="sidebar-logo" title="Sketchers Media CRM">
+        <a href="/overview" className="sidebar-logo" title="Reset Dental Media CRM">
           <img src="/logo.png" alt="Company logo" />
         </a>
         <button className="sidebar-icon-btn" onClick={toggleExpanded} title={expanded ? "Collapse sidebar" : "Expand sidebar"}>

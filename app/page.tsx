@@ -24,7 +24,7 @@ export default function LoginPage() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleLogin}>
         <img src="/logo.png" alt="Company logo" className="login-logo" />
-        <h2>Sketchers Media CRM</h2>
+        <h2>Reset Dental Media CRM</h2>
         <label>Email</label>
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label>Password</label>

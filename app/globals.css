@@ -569,3 +569,40 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--primary) !important;
   box-shadow: 0 0 0 3px var(--primary-tint);
 }
+
+/* ---- Browser calling: call bar, incoming bar, outcome panel ---- */
+.call-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1100;
+  background: var(--card-bg); color: var(--text);
+  border-top: 2px solid var(--primary);
+  box-shadow: 0 -6px 20px var(--shadow);
+  padding: 10px 16px;
+}
+.call-bar.incoming { border-top-color: #1a8f4c; }
+.call-bar-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.call-bar-info { display: flex; flex-direction: column; min-width: 180px; flex: 1; }
+.call-bar-info span { font-size: 13px; color: var(--text-muted); }
+.call-bar-state { font-weight: 600; min-width: 140px; }
+.call-bar-state.connected { color: #1a8f4c; }
+.call-bar-actions { display: flex; gap: 8px; }
+.call-hangup { background: #d33; }
+.call-answer { background: #1a8f4c; }
+.call-keypad {
+  display: grid; grid-template-columns: repeat(3, 56px); gap: 6px;
+  margin: 0 auto 10px; width: max-content;
+}
+.call-outcome {
+  background: var(--card-bg); color: var(--text); padding: 24px; border-radius: 14px;
+  width: 440px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto;
+  box-shadow: 0 12px 36px var(--shadow); animation: card-pop-in 0.18s ease;
+}
+.call-outcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.call-outcome-opt {
+  display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--input-border); font-size: 14px;
+}
+.call-outcome-opt.selected { border-color: var(--primary); background: var(--primary-tint); }
+.next-lead-card {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+  padding: 12px 14px; border-radius: 10px; border: 1px solid var(--card-border); background: var(--primary-tint);
+}

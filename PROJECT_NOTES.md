@@ -1,4 +1,4 @@
-# Project Notes — Sketchers Media CRM
+# Project Notes — Reset Dental Media CRM
 
 Internal reference for picking this project back up in a new session. Last updated 2026-07-14.
 
@@ -62,7 +62,7 @@ No `pages/` directory, no i18n config anywhere.
 
 ## 2. Branding
 
-- **Name**: "Sketchers Media CRM" (was "Company CRM" originally).
+- **Name**: "Reset Dental Media CRM" (was "Company CRM" originally).
 - **Accent color**: burgundy `#5C1A2E`, used identically in light and dark mode. Tint color: `#F5E9EC` (light) / `#3A1B22` (dark), used for hover states and highlight boxes.
 - **Dark mode**: near-black surfaces (`#121212` bg, `#1e1e1e` cards). Toggle lives at the bottom of the sidebar; auto-detects system preference on first visit, manual choice persisted in `localStorage`.
 - **Sidebar**: fixed dark near-black rail (`#1B0F13`), icon-only by default, expandable (persisted in `localStorage`) to show text labels. Logo sits stacked directly under the hamburger toggle in both states.
